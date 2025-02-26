@@ -1,5 +1,7 @@
 import "cheerio";
-import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
+//import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { DirectoryLoader } from "langchain/document_loaders/fs/directory";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { llm, embeddings, vectorStore } from "../app.ts";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
@@ -9,7 +11,9 @@ import { StateGraph } from "@langchain/langgraph";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { z } from "zod";
 
+
     /* INDEXING */
+/*
 // Document Loader: Carica il contenuto di una pagina web utilizzando Cheerio
 console.log("\n\n DOCUMENT LOADER \n");
 const pTagSelector = "p";
@@ -21,12 +25,11 @@ const cheerioLoader = new CheerioWebBaseLoader(
 );
 const docs = await cheerioLoader.load();    // Carica il contenuto della pagina
 
-
 console.log(docs[0].pageContent.slice(0, 500));
 console.assert(docs.length === 1);
 console.log(`Numero caratteri: ${docs[0].pageContent.length}`);
 
-// Text Splitter: Divide il contenuto caricato in sottodocumenti più piccoli
+// Text Splitter: Divide il contenuto caricato in sottodocumenti
 console.log("\n\n TEXT SPLITTER \n");
 const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: 1000,  // Dimensione massima in caratteri di un sottodocumento
@@ -35,11 +38,47 @@ const splitter = new RecursiveCharacterTextSplitter({
 const allSplits = await splitter.splitDocuments(docs);
 console.log(`Split blog post into ${allSplits.length} sub-documents.`);
 console.log(allSplits[0].pageContent.slice(0, 500));
+*/
+
+
+/*
+// Carica il contenuto di un file PDF
+const prova = "./pdf_files/prova.pdf";
+
+const loader = new PDFLoader(prova);
+const docs = await loader.load();
+docs[0];
+console.log(docs[0].metadata);
+console.log(docs[0].pageContent.slice(0, 500));
+*/
+
+// Document Loader: Carica il contenuto di una directory di file PDF
+console.log("\n\n DOCUMENT LOADER \n");
+
+const dataPath = "./pdf_files"; // carico la directory direttamente
+// carico tutti i pdf della directory
+const directoryLoader = new DirectoryLoader(dataPath, {
+  ".pdf": (path: string) => new PDFLoader(path),
+});
+
+const directoryDocs = await directoryLoader.load();
+console.log(directoryDocs[0]);
+
+// Text Splitter: Divide il contenuto caricato in sottodocumenti più piccoli
+console.log("\n\n TEXT SPLITTER \n");
+const splitter = new RecursiveCharacterTextSplitter({
+  chunkSize: 1000,
+  chunkOverlap: 200,
+});
+
+const allSplits = await splitter.splitDocuments(directoryDocs);
+console.log(allSplits[0]);
 
 // Memorizzazione dei documenti nel Vector Store
 console.log("\n\n VECTOR STORE\n");
 await vectorStore.addDocuments(allSplits); 
 console.log("Numero totale di documenti:", vectorStore.memoryVectors.length);
+
 
 
     /* RETRIEVAL AND GENERATE */
@@ -94,8 +133,11 @@ const graph = new StateGraph(StateAnnotation)
     .addEdge("generate", "__end__")
     .compile();
 
+
+
+
 // Esempio di test dell'intero sistema
-let inputs = { question: "What is Task Decomposition?" };
+let inputs = { question: "What is the most important register in cpu?" };
 const result = await graph.invoke(inputs);
 if (Array.isArray(result.context)) {
     console.log(result.context.slice(0, 2));
@@ -190,7 +232,7 @@ const graphQA = new StateGraph(StateAnnotationQA)
 
   //fine prima parte
   let inputsQA = {
-    question: "What does the end of the post say about Task Decomposition?",
+    question: "What is the fetch-decode-execute cycle? Tell me how does it work and whats the paragraph name where is in the file.",
   };
   
   console.log(inputsQA);

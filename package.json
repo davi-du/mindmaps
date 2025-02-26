@@ -9,7 +9,8 @@
     "chromadb": "^1.10.4",
     "dotenv": "^16.4.7",
     "langchain": "^0.3.19",
-    "openai": "^4.85.2"
+    "openai": "^4.85.2",
+    "pdf-parse": "^1.1.1"
   },
   "name": "rag-1",
   "version": "1.0.0",
