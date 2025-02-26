@@ -1,0 +1,33 @@
+{
+  "dependencies": {
+    "@langchain/community": "^0.3.32",
+    "@langchain/core": "^0.3.40",
+    "@langchain/langgraph": "^0.2.48",
+    "@langchain/mistralai": "^0.2.0",
+    "@langchain/openai": "^0.4.4",
+    "cheerio": "^1.0.0",
+    "chromadb": "^1.10.4",
+    "dotenv": "^16.4.7",
+    "langchain": "^0.3.19",
+    "openai": "^4.85.2"
+  },
+  "name": "rag-1",
+  "version": "1.0.0",
+  "description": "Test repository",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davi-du/RAG.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/davi-du/RAG/issues"
+  },
+  "homepage": "https://github.com/davi-du/RAG#readme"
+}
