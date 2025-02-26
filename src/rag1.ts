@@ -195,4 +195,8 @@ for await (const chunk of await graphQA.stream(inputsQA, { streamMode: "updates"
   console.log("\n====\n");
 }
 console.log(`\nQuestion: ` + inputsQA.question);
-console.log((outputQA as StateGraph).answer); // Output della risposta non va, controllare dopo
+if (outputQA && outputQA.generateQA && outputQA.generateQA.answer) {
+  console.log(`\nAnswer: ${outputQA.generateQA.answer}`);
+} else {
+  console.log(`\nAnswer: Unable to extract answer from response`);
+}
