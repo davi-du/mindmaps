@@ -11,8 +11,15 @@ import { StateGraph } from "@langchain/langgraph";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { z } from "zod";
 
+/* 1. DOCUMENT LOADING: Caricamento PDF dalla directory */
+console.log("\n\n DOCUMENT LOADER \n");
+const dataPath = "./pdf_files"; // Carico la directory direttamente
+const directoryLoader = new DirectoryLoader(dataPath, {
+  ".pdf": (path: string) => new PDFLoader(path),
+});
+const directoryDocs = await directoryLoader.load();
+console.log("Pagine caricate:", directoryDocs.length);
 
-    /* INDEXING */
 /*
 // Document Loader: Carica il contenuto di una pagina web utilizzando Cheerio
 console.log("\n\n DOCUMENT LOADER \n");
@@ -40,7 +47,6 @@ console.log(`Split blog post into ${allSplits.length} sub-documents.`);
 console.log(allSplits[0].pageContent.slice(0, 500));
 */
 
-
 /*
 // Carica il contenuto di un file PDF
 const prova = "./pdf_files/prova.pdf";
@@ -52,117 +58,60 @@ console.log(docs[0].metadata);
 console.log(docs[0].pageContent.slice(0, 500));
 */
 
-// Document Loader: Carica il contenuto di una directory di file PDF
-console.log("\n\n DOCUMENT LOADER \n");
-
-const dataPath = "./pdf_files"; // carico la directory direttamente
-// carico tutti i pdf della directory
-const directoryLoader = new DirectoryLoader(dataPath, {
-  ".pdf": (path: string) => new PDFLoader(path),
-});
-
-const directoryDocs = await directoryLoader.load();
-console.log(directoryDocs[0]);
-
-// Text Splitter: Divide il contenuto caricato in sottodocumenti più piccoli
+/* 2. TEXT SPLITTING: Divido i documenti in chunk */
 console.log("\n\n TEXT SPLITTER \n");
 const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: 1000,
   chunkOverlap: 200,
 });
-
 const allSplits = await splitter.splitDocuments(directoryDocs);
 console.log(allSplits[0]);
 
-// Memorizzazione dei documenti nel Vector Store
+/* 3. VECTOR STORE: Memorizzo i documenti nel Vector Store */
 console.log("\n\n VECTOR STORE\n");
-await vectorStore.addDocuments(allSplits); 
+await vectorStore.addDocuments(allSplits);
 console.log("Numero totale di documenti:", vectorStore.memoryVectors.length);
 
-
-
-    /* RETRIEVAL AND GENERATE */
-// Prompt Template per generare risposte basate sul contesto
-//const promptTemplate = ragPrompt;
+/* 4. PROMPT TEMPLATE per generare risposte basate sul contesto */
 const template = `Use the following pieces of context to answer the question at the end.
 If you don't know the answer, just say that you don't know, don't try to make up an answer.
 Use three sentences maximum and keep the answer as concise as possible.
-Always say "grazie compare!" at the end of the answer.
+Always say "Grazie per averlo chiesto!" at the end of the answer.
 {context}
 Question: {question}
 Helpful Answer:`;
-
 const promptTemplate = ChatPromptTemplate.fromMessages([
-    ["user", template],
+  ["user", template],
 ]);
 
-// Stato iniziale per la gestione delle annotazioni nel flusso dati
-const InputStateAnnotation = Annotation.Root({
-    question: Annotation, 
-});
-
+/* 5. STATE GRAPH: Definizione del grafo per retrieval e generazione */
 const StateAnnotation = Annotation.Root({
-    question: Annotation,
-    context: Annotation,
-    answer: Annotation,
+  question: Annotation,
+  context: Annotation,
+  answer: Annotation,
 });
-
-// Funzione di recupero dei documenti affini alla domanda che l'utente ha posto
 const retrieve = async (state) => {
-    const retrievedDocs = await vectorStore.similaritySearch(state.question);
-    return { context: retrievedDocs };
+  const retrievedDocs = await vectorStore.similaritySearch(state.question);
+  return { context: retrievedDocs };
 };
-
-// Funzione per generare una risposta in base al contesto recuperato
 const generate = async (state) => {
-    const docsContent = state.context.map((doc) => doc.pageContent).join("\n");
-    const messages = await promptTemplate.invoke({
-        question: state.question,   
-        context: docsContent,   
-    });
-    const response = await llm.invoke(messages);
-    return { answer: response.content };
+  const docsContent = state.context.map((doc) => doc.pageContent).join("\n");
+  const messages = await promptTemplate.invoke({
+    question: state.question,
+    context: docsContent,
+  });
+  const response = await llm.invoke(messages);
+  return { answer: response.content };
 };
-
-// Creazione di un grafo di stati per orchestrare il processo di retrieval e generazione
 const graph = new StateGraph(StateAnnotation)
-    .addNode("retrieve", retrieve)
-    .addNode("generate", generate)
-    .addEdge("__start__", "retrieve")
-    .addEdge("retrieve", "generate")
-    .addEdge("generate", "__end__")
-    .compile();
+  .addNode("retrieve", retrieve)
+  .addNode("generate", generate)
+  .addEdge("__start__", "retrieve")
+  .addEdge("retrieve", "generate")
+  .addEdge("generate", "__end__")
+  .compile();
 
-
-
-
-// Esempio di test dell'intero sistema
-let inputs = { question: "What is the most important register in cpu?" };
-const result = await graph.invoke(inputs);
-if (Array.isArray(result.context)) {
-    console.log(result.context.slice(0, 2));
-} else {
-    console.error("Unexpected type for result.context");
-}
-console.log(`\nAnswer: ${result["answer"]}`);
-
-// Streaming delle risposte generate
-console.log(inputs);
-console.log("\n====\n");
-for await (const chunk of await graph.stream(inputs, {
-  streamMode: "updates",
-})) {
-  console.log(chunk);
-  console.log("\n====\n");
-}
-
-// Streaming dei messaggi generati dal grafo
-const stream = await graph.stream(inputs, { streamMode: "messages" });
-for await (const [message, _metadata] of stream) {
-  process.stdout.write(message.content + "|");
-}
-
-// Classificazione dei documenti in sezioni per una migliore analisi delle query
+/* 6. DOCUMENT CLASSIFICATION: Classifico i documenti in sezioni */
 const totalDocuments = allSplits.length;
 const third = Math.floor(totalDocuments / 3);
 allSplits.forEach((document, i) => {
@@ -174,20 +123,17 @@ allSplits.forEach((document, i) => {
     document.metadata["section"] = "end";
   }
 });
-allSplits[0].metadata;
 
-// Creazione di un nuovo Vector Store per le domande e risposte
+/* 7. VECTOR STORE QA: Creo un nuovo Vector Store per QA */
 const vectorStoreQA = new MemoryVectorStore(embeddings);
 await vectorStoreQA.addDocuments(allSplits);
-
-// Schema di validazione per la ricerca di informazioni
 const searchSchema = z.object({
   query: z.string().describe("Search query to run."),
   section: z.enum(["beginning", "middle", "end"]).describe("Section to query."),
 });
 const structuredLlm = llm.withStructuredOutput(searchSchema);
 
-// Definizione di un grafo con analisi della query, retrieval e generazione della risposta
+/* 8. STATE GRAPH QA: Definizione del grafo con analisi della query */
 const StateAnnotationQA = Annotation.Root({
   question: Annotation<string>,
   search: Annotation<z.infer<typeof searchSchema>>,
@@ -195,12 +141,12 @@ const StateAnnotationQA = Annotation.Root({
   answer: Annotation<string>,
 });
 
-const analyzeQuery = async (state: typeof InputStateAnnotation.State) => {
+const analyzeQuery = async (state) => {
   const result = await structuredLlm.invoke(state.question);
   return { search: result };
 };
 
-const retrieveQA = async (state: typeof StateAnnotationQA.State) => {
+const retrieveQA = async (state) => {
   const filter = (doc) => doc.metadata.section === state.search.section;
   const retrievedDocs = await vectorStore.similaritySearch(
     state.search.query,
@@ -210,7 +156,7 @@ const retrieveQA = async (state: typeof StateAnnotationQA.State) => {
   return { context: retrievedDocs };
 };
 
-const generateQA = async (state: typeof StateAnnotationQA.State) => {
+const generateQA = async (state) => {
   const docsContent = state.context.map((doc) => doc.pageContent).join("\n");
   const messages = await promptTemplate.invoke({
     question: state.question,
@@ -230,16 +176,23 @@ const graphQA = new StateGraph(StateAnnotationQA)
   .addEdge("generateQA", "__end__")
   .compile();
 
-  //fine prima parte
-  let inputsQA = {
-    question: "What is the fetch-decode-execute cycle? Tell me how does it work and whats the paragraph name where is in the file.",
-  };
-  
-  console.log(inputsQA);
+/* 9. TEST RETRIEVAL E GENERAZIONE */
+let inputs = { question: "What is an interpreter?" };
+const result = await graph.invoke(inputs);
+console.log(`\nQuestion: ${result["question"]}`);
+console.log(`\nAnswer: ${result["answer"]}`);
+
+/* 10. TEST QA SYSTEM */
+let inputsQA = {
+  question: "Tell me how does it work and what's the paragraph name where it is in the file.",
+};
+let outputQA;
+
+console.log("\n====\n");
+for await (const chunk of await graphQA.stream(inputsQA, { streamMode: "updates" })) {
+  console.log(chunk);
+  outputQA = chunk;
   console.log("\n====\n");
-  for await (const chunk of await graphQA.stream(inputsQA, {
-    streamMode: "updates",
-  })) {
-    console.log(chunk);
-    console.log("\n====\n");
-  }
+}
+console.log(`\nQuestion: ` + inputsQA.question);
+console.log((outputQA as StateGraph).answer); // Output della risposta non va, controllare dopo
