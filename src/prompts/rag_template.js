@@ -1,15 +1,9 @@
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-
-const template = `
-Context information is below:
----------------
+const template = `Use the following pieces of context to answer the question at the end.
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+Use three sentences maximum and keep the answer as concise as possible.
+Always say "Grazie per averlo chiesto!" at the end of the answer.
 {context}
----------------
-
-Given the context information and not prior knowledge, answer the following question:
 Question: {question}
+Helpful Answer:`;
 
-Answer: Let's approach this step by step:
-`;
-
-export const ragPrompt = ChatPromptTemplate.fromTemplate(template);
+export { template };

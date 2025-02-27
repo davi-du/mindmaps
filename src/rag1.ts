@@ -1,8 +1,4 @@
-import "cheerio";
-//import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { DirectoryLoader } from "langchain/document_loaders/fs/directory";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { indexDocuments } from "./indexing.ts";
 import { llm, embeddings, vectorStore } from "../app.ts";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { Document } from "@langchain/core/documents";
@@ -10,81 +6,21 @@ import { Annotation } from "@langchain/langgraph";
 import { StateGraph } from "@langchain/langgraph";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { z } from "zod";
+import { template } from "./prompts/rag_template.js";
 
-/* 1. DOCUMENT LOADING: Caricamento PDF dalla directory */
-console.log("\n\n DOCUMENT LOADER \n");
-const dataPath = "./pdf_files"; // Carico la directory direttamente
-const directoryLoader = new DirectoryLoader(dataPath, {
-  ".pdf": (path: string) => new PDFLoader(path),
-});
-const directoryDocs = await directoryLoader.load();
-console.log("Pagine caricate:", directoryDocs.length);
 
-/*
-// Document Loader: Carica il contenuto di una pagina web utilizzando Cheerio
-console.log("\n\n DOCUMENT LOADER \n");
-const pTagSelector = "p";
-const cheerioLoader = new CheerioWebBaseLoader(
-  "https://lilianweng.github.io/posts/2023-06-23-agent/",
-  {
-    selector: pTagSelector, // Selettore CSS per estrarre i paragrafi
-  }
-);
-const docs = await cheerioLoader.load();    // Carica il contenuto della pagina
 
-console.log(docs[0].pageContent.slice(0, 500));
-console.assert(docs.length === 1);
-console.log(`Numero caratteri: ${docs[0].pageContent.length}`);
+/* Indexing */
+const allSplits = await indexDocuments("./pdf_files", "https://en.wikipedia.org/wiki/Interpreter_(computing)");
 
-// Text Splitter: Divide il contenuto caricato in sottodocumenti
-console.log("\n\n TEXT SPLITTER \n");
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,  // Dimensione massima in caratteri di un sottodocumento
-  chunkOverlap: 200,    // Sovrapposizione tra i sottodocumenti?
-});
-const allSplits = await splitter.splitDocuments(docs);
-console.log(`Split blog post into ${allSplits.length} sub-documents.`);
-console.log(allSplits[0].pageContent.slice(0, 500));
-*/
 
-/*
-// Carica il contenuto di un file PDF
-const prova = "./pdf_files/prova.pdf";
-
-const loader = new PDFLoader(prova);
-const docs = await loader.load();
-docs[0];
-console.log(docs[0].metadata);
-console.log(docs[0].pageContent.slice(0, 500));
-*/
-
-/* 2. TEXT SPLITTING: Divido i documenti in chunk */
-console.log("\n\n TEXT SPLITTER \n");
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,
-  chunkOverlap: 200,
-});
-const allSplits = await splitter.splitDocuments(directoryDocs);
-console.log(allSplits[0]);
-
-/* 3. VECTOR STORE: Memorizzo i documenti nel Vector Store */
-console.log("\n\n VECTOR STORE\n");
-await vectorStore.addDocuments(allSplits);
-console.log("Numero totale di documenti:", vectorStore.memoryVectors.length);
-
-/* 4. PROMPT TEMPLATE per generare risposte basate sul contesto */
-const template = `Use the following pieces of context to answer the question at the end.
-If you don't know the answer, just say that you don't know, don't try to make up an answer.
-Use three sentences maximum and keep the answer as concise as possible.
-Always say "Grazie per averlo chiesto!" at the end of the answer.
-{context}
-Question: {question}
-Helpful Answer:`;
+/* Template del prompt per generare risposte basate sul contesto */
 const promptTemplate = ChatPromptTemplate.fromMessages([
   ["user", template],
 ]);
 
-/* 5. STATE GRAPH: Definizione del grafo per retrieval e generazione */
+
+/* STATE GRAPH: Definizione del grafo per retrieval e generazione */
 const StateAnnotation = Annotation.Root({
   question: Annotation,
   context: Annotation,
@@ -94,6 +30,7 @@ const retrieve = async (state) => {
   const retrievedDocs = await vectorStore.similaritySearch(state.question);
   return { context: retrievedDocs };
 };
+
 const generate = async (state) => {
   const docsContent = state.context.map((doc) => doc.pageContent).join("\n");
   const messages = await promptTemplate.invoke({
@@ -103,6 +40,7 @@ const generate = async (state) => {
   const response = await llm.invoke(messages);
   return { answer: response.content };
 };
+
 const graph = new StateGraph(StateAnnotation)
   .addNode("retrieve", retrieve)
   .addNode("generate", generate)
@@ -111,7 +49,8 @@ const graph = new StateGraph(StateAnnotation)
   .addEdge("generate", "__end__")
   .compile();
 
-/* 6. DOCUMENT CLASSIFICATION: Classifico i documenti in sezioni */
+
+/* DOCUMENT CLASSIFICATION: Classifico i documenti in sezioni */
 const totalDocuments = allSplits.length;
 const third = Math.floor(totalDocuments / 3);
 allSplits.forEach((document, i) => {
@@ -124,7 +63,8 @@ allSplits.forEach((document, i) => {
   }
 });
 
-/* 7. VECTOR STORE QA: Creo un nuovo Vector Store per QA */
+
+/* VECTOR STORE QA: Creo un nuovo Vector Store per QA */
 const vectorStoreQA = new MemoryVectorStore(embeddings);
 await vectorStoreQA.addDocuments(allSplits);
 const searchSchema = z.object({
@@ -133,7 +73,8 @@ const searchSchema = z.object({
 });
 const structuredLlm = llm.withStructuredOutput(searchSchema);
 
-/* 8. STATE GRAPH QA: Definizione del grafo con analisi della query */
+
+/* STATE GRAPH QA: Definizione del grafo con analisi della query */
 const StateAnnotationQA = Annotation.Root({
   question: Annotation<string>,
   search: Annotation<z.infer<typeof searchSchema>>,
@@ -176,15 +117,19 @@ const graphQA = new StateGraph(StateAnnotationQA)
   .addEdge("generateQA", "__end__")
   .compile();
 
-/* 9. TEST RETRIEVAL E GENERAZIONE */
+
+  //TEST
+/* TEST RETRIEVAL E GENERAZIONE */
 let inputs = { question: "What is an interpreter?" };
 const result = await graph.invoke(inputs);
 console.log(`\nQuestion: ${result["question"]}`);
 console.log(`\nAnswer: ${result["answer"]}`);
 
-/* 10. TEST QA SYSTEM */
+
+/* TEST QA SYSTEM */
 let inputsQA = {
   question: "Tell me how does it work and what's the paragraph name where it is in the file.",
+  //question: "During the software development cycle, programmers make frequent changes to the source code, how can an interpreter help?",
 };
 let outputQA;
 
@@ -196,7 +141,27 @@ for await (const chunk of await graphQA.stream(inputsQA, { streamMode: "updates"
 }
 console.log(`\nQuestion: ` + inputsQA.question);
 if (outputQA && outputQA.generateQA && outputQA.generateQA.answer) {
-  console.log(`\nAnswer: ${outputQA.generateQA.answer}`);
+  console.log(`\nAnswer: ${outputQA.generateQA.answer} \n\n`);
+} else {
+  console.log(`\nAnswer: Unable to extract answer from response`);
+}
+
+//altra domanda
+let inputsQA2 = {
+  //question: "Can you summarize the key advantages of using an interpreter over a compiler?",
+  question: "Is MATLAB an interpreted language or a compiled language?",
+};
+let outputQA2;
+
+console.log("\n====\n");
+for await (const chunk of await graphQA.stream(inputsQA2, { streamMode: "updates" })) {
+  console.log(chunk);
+  outputQA2 = chunk;
+  console.log("\n====\n");
+}
+console.log(`\nQuestion: ` + inputsQA2.question);
+if (outputQA2 && outputQA2.generateQA && outputQA2.generateQA.answer) {
+  console.log(`\nAnswer: ${outputQA2.generateQA.answer} \n\n`);
 } else {
   console.log(`\nAnswer: Unable to extract answer from response`);
 }
