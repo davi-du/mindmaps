@@ -6,15 +6,64 @@ import { Annotation } from "@langchain/langgraph";
 import { StateGraph } from "@langchain/langgraph";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { z } from "zod";
-import { template } from "./prompts/rag_template.js";
+
 
 /* Indexing */
 const allSplits = await indexDocuments("./pdf_files", "https://en.wikipedia.org/wiki/Interpreter_(computing)");
 
+
 /* Template del prompt per generare risposte basate sul contesto */
+
+const template = `Use the following pieces of context to answer the question at the end.  
+If you don't know the answer, just say that you don't know, don't try to make up an answer.  
+Use three sentences maximum and keep the answer as concise as possible.  
+
+For each relevant term, append a token in the format $N1 directly next to the term.  
+If a term belongs to a broader category, assign it a subtoken in the format $N1C1 (for categories) or $N1N1 (for specific instances).  
+For example, 'car $N2' 'SUV $N2C1', and 'van $N2C2'.  
+Similarly, specific items inherit their category, such as 'Ferrari $N2N1' and 'Ford $N2N2'.  
+
+Always say "Grazie per averlo chiesto!" at the end of the answer.  
+
+{context}  
+
+Question: {question}  
+Helpful Answer:`;
+
 const promptTemplate = ChatPromptTemplate.fromMessages([
   ["user", template],
 ]);
+
+
+/* STATE GRAPH: Definizione del grafo per retrieval e generazione */
+const StateAnnotation = Annotation.Root({
+  question: Annotation,
+  context: Annotation,
+  answer: Annotation,
+});
+const retrieve = async (state) => {
+  const retrievedDocs = await vectorStore.similaritySearch(state.question);
+  return { context: retrievedDocs };
+};
+
+const generate = async (state) => {
+  const docsContent = state.context.map((doc) => doc.pageContent).join("\n");
+  const messages = await promptTemplate.invoke({
+    question: state.question,
+    context: docsContent,
+  });
+  const response = await llm.invoke(messages);
+  return { answer: response.content };
+};
+
+const graph = new StateGraph(StateAnnotation)
+  .addNode("retrieve", retrieve)
+  .addNode("generate", generate)
+  .addEdge("__start__", "retrieve")
+  .addEdge("retrieve", "generate")
+  .addEdge("generate", "__end__")
+  .compile();
+
 
 /* DOCUMENT CLASSIFICATION: Classifico i documenti in sezioni */
 const totalDocuments = allSplits.length;
@@ -29,6 +78,7 @@ allSplits.forEach((document, i) => {
   }
 });
 
+
 /* VECTOR STORE QA: Creo un nuovo Vector Store per QA */
 const vectorStoreQA = new MemoryVectorStore(embeddings);
 await vectorStoreQA.addDocuments(allSplits);
@@ -38,8 +88,6 @@ const searchSchema = z.object({
 });
 const structuredLlm = llm.withStructuredOutput(searchSchema);
 
-// Variabile globale per tenere traccia delle domande e risposte precedenti
-let previousQA = "";
 
 /* STATE GRAPH QA: Definizione del grafo con analisi della query */
 const StateAnnotationQA = Annotation.Root({
@@ -47,12 +95,11 @@ const StateAnnotationQA = Annotation.Root({
   search: Annotation<z.infer<typeof searchSchema>>,
   context: Annotation<Document[]>,
   answer: Annotation<string>,
-  previous_qa: Annotation<string>, // Aggiungiamo una annotazione per le Q&A precedenti
 });
 
 const analyzeQuery = async (state) => {
   const result = await structuredLlm.invoke(state.question);
-  return { search: result, previous_qa: previousQA };
+  return { search: result };
 };
 
 const retrieveQA = async (state) => {
@@ -70,13 +117,8 @@ const generateQA = async (state) => {
   const messages = await promptTemplate.invoke({
     question: state.question,
     context: docsContent,
-    previous_qa: state.previous_qa || "Nessuna domanda precedente.",
   });
   const response = await llm.invoke(messages);
-  
-  // Aggiorniamo la variabile globale delle Q&A precedenti
-  previousQA += `Domanda: ${state.question}\nRisposta: ${response.content}\n\n`;
-  
   return { answer: response.content };
 };
 
@@ -90,10 +132,11 @@ const graphQA = new StateGraph(StateAnnotationQA)
   .addEdge("generateQA", "__end__")
   .compile();
 
-//TEST
+
+  //TEST
 /* TEST RETRIEVAL E GENERAZIONE */
 let inputs = { question: "What is an interpreter?" };
-const result = await graphQA.invoke(inputs);
+const result = await graph.invoke(inputs);
 console.log(`\nQuestion: ${result["question"]}`);
 console.log(`\nAnswer: ${result["answer"]}`);
 
@@ -158,8 +201,7 @@ if (outputQA2 && outputQA2.generateQA && outputQA2.generateQA.answer) {
 
 //altra domanda
 let inputsQA3 = {
-  question: "Can you summarize the main benefits of using it and tell me how many questions I asked you?",
-  //question: "Can you summarize the key advantages of using it?",
+  question: "Can you summarize the key advantages of using it?",
 };
 let outputQA3;
 
