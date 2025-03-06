@@ -70,12 +70,12 @@ const generateQA = async (state) => {
   const messages = await promptTemplate.invoke({
     question: state.question,
     context: docsContent,
-    previous_qa: state.previous_qa || "Nessuna domanda precedente.",
+    previous_qa: state.previous_qa || "No previous questions.",
   });
   const response = await llm.invoke(messages);
   
   // Aggiorniamo la variabile globale delle Q&A precedenti
-  previousQA += `Domanda: ${state.question}\nRisposta: ${response.content}\n\n`;
+  previousQA += `Question: ${state.question}\nAnswer: ${response.content}\n\n`;
   
   return { answer: response.content };
 };
@@ -135,7 +135,6 @@ if (outputQA1 && outputQA1.generateQA && outputQA1.generateQA.answer) {
 } else {
   console.log(`\nAnswer: Unable to extract answer from response`);
 }
-
 
 //altra domanda
 let inputsQA2 = {

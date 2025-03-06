@@ -14,6 +14,7 @@ Always say "Grazie per averlo chiesto!" at the end of the answer.
 {previous_qa}
 
 Question: {question}  
+
 Helpful Answer:`;
 
 export { template };
