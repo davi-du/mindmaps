@@ -28,9 +28,9 @@ Use three sentences maximum and keep the answer as concise as possible.
 IMPORTANT: You MUST tag key terms in your answer with tokens.
 For each relevant technical term in your answer, append a token in the format $N1 directly next to the term (no space between).
 If a term belongs to a broader category, assign it a subtoken in the format $N1C1 (for categories) or $N1N1 (for specific instances).
-Example: 'car$N2' 'SUV$N2C1' 'van$N2C2' 'Ferrari$N2N1' 'Ford$N2N2'
+Example: 'car [$N2]' 'SUV [$N2C1]' 'van [$N2C2]' 'Ferrari [$N2N1]' 'Ford [$N2N2]'
 
-Always say "Thank you for asking!" at the end of the answer.
+Always say "Grazie compà!" at the end of the answer.
 
 Context:
 {context}
@@ -40,6 +40,6 @@ Previous Q&A:
 
 Question: {question}
 
-Helpful Answer (remember to add tokens to key terms):`;
+Helpful Answer (REMEMBER TO ADD TOKENS TO KEY TERMS):`;
 
 export { template };

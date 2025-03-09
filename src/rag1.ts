@@ -50,18 +50,12 @@ const StateAnnotationQA = Annotation.Root({
   previous_qa: Annotation<string>, // Aggiungiamo una annotazione per le Q&A precedenti
 });
 
-
-
-
-
-
 /*
 //funziona con tutti tranne groq
 const analyzeQuery = async (state) => {
   const result = await structuredLlm.invoke(state.question);
   return { search: result, previous_qa: previousQA };
 };
-
 */
 
 //da usare con groq
@@ -89,18 +83,8 @@ const analyzeQuery = async (state) => {
   
   //console.log(`Query analysis: '${query}', section: '${section}'`);
   
-  return { search: { query, section }, previous_qa: previousQA };
+  return { search: { query, section }, previous_qa: previousQA }; //groq vuole anche la sezione
 };
-
-
-
-
-
-
-
-
-
-
 
 const retrieveQA = async (state) => {
   const filter = (doc) => doc.metadata.section === state.search.section;
