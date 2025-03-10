@@ -1,4 +1,6 @@
 /*
+
+//vecchio template
 const template = `Use the following pieces of context to answer the question at the end.  
 If you don't know the answer, just say that you don't know, don't try to make up an answer.  
 Use three sentences maximum and keep the answer as concise as possible.  
@@ -30,7 +32,7 @@ For each relevant technical term in your answer, append a token in the format $N
 If a term belongs to a broader category, assign it a subtoken in the format $N1C1 (for categories) or $N1N1 (for specific instances).
 Example: 'car [$N2]' 'SUV [$N2C1]' 'van [$N2C2]' 'Ferrari [$N2N1]' 'Ford [$N2N2]'
 
-Always say "Grazie compà!" at the end of the answer.
+Always say "Grazie per averlo chiesto!" at the end of the answer.
 
 Context:
 {context}
