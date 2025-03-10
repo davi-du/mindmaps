@@ -1,6 +1,7 @@
 import { ChatMistralAI } from "@langchain/mistralai";
 import { MistralAIEmbeddings } from "@langchain/mistralai";
 import { ChatGroq } from "@langchain/groq";
+import { ChatFireworks } from "@langchain/community/chat_models/fireworks";
 import { CohereEmbeddings } from "@langchain/cohere";
 import { MemoryVectorStore } from "langchain/vectorstores/memory"; 
 import dotenv from 'dotenv'; // Libreria per caricare le variabili d'ambiente
@@ -22,11 +23,22 @@ const embeddings = new MistralAIEmbeddings({
 */
 
 //groq+cohere
+/*
 const llm = new ChatGroq({
   model: "mixtral-8x7b-32768",
   temperature: 0
 });
 
+const embeddings = new CohereEmbeddings({
+  model: "embed-english-v3.0"
+});
+*/
+
+//deepseel + cohere
+const llm = new ChatFireworks({
+  model: "accounts/fireworks/models/llama-v3p1-70b-instruct",
+  temperature: 0
+});
 const embeddings = new CohereEmbeddings({
   model: "embed-english-v3.0"
 });
