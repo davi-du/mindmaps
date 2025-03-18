@@ -9,18 +9,15 @@ import dotenv from 'dotenv'; // Libreria per caricare le variabili d'ambiente
 dotenv.config();    // Carica le variabili d'ambiente dal file .env
 
 //test MISTRAL
-/*
 //modello di chat 
 const llm = new ChatMistralAI({
   model: "mistral-large-latest",
   temperature: 0    //anche qui risposte più deterministiche come per openAI?
 });
 
-//modello di embedding
 const embeddings = new MistralAIEmbeddings({
   model: "mistral-embed"
 });
-*/
 
 //groq+cohere
 /*
@@ -35,6 +32,7 @@ const embeddings = new CohereEmbeddings({
 */
 
 //deepseel + cohere
+/*
 const llm = new ChatFireworks({
   model: "accounts/fireworks/models/llama-v3p1-70b-instruct",
   temperature: 0
@@ -42,7 +40,7 @@ const llm = new ChatFireworks({
 const embeddings = new CohereEmbeddings({
   model: "embed-english-v3.0"
 });
-
+*/
 //Inizializza il Vector Store in memoria
 const vectorStore = new MemoryVectorStore(embeddings);
 
