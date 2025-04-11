@@ -1,0 +1,157 @@
+import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { DirectoryLoader } from "langchain/document_loaders/fs/directory";
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { ChatMistralAI, MistralAIEmbeddings } from "@langchain/mistralai";
+import { fileURLToPath } from "url";
+import path, { dirname } from "path";
+
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import cosineSimilarity from "compute-cosine-similarity";
+
+//
+
+// Simulazione di __dirname per ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const mistralApiKey = "TwLq6jM7zTwo6qcE3vNXokD3MuofaMOA"; //in produzione va tolta eh
+
+//modello di chat 
+const llm = new ChatMistralAI({
+  model: "mistral-large-latest",
+  temperature: 0,
+  apiKey: mistralApiKey,
+});
+
+const embeddings = new MistralAIEmbeddings({
+  model: "mistral-embed",
+  apiKey: mistralApiKey,
+});
+
+let vectorStore: MemoryVectorStore | null = null;
+
+async function loadAndIndexData() {
+  const pdfDir = path.resolve(__dirname, "./data/pdf_files");
+
+  const pdfLoader = new DirectoryLoader(pdfDir, {
+  ".pdf": (filePath) => new PDFLoader(filePath),
+});
+
+
+  const webLoader = new CheerioWebBaseLoader(
+    "https://en.wikipedia.org/wiki/Interpreter_(computing)",
+    { selector: "p" }
+  );
+
+  //sistemare il testo dovrebbe aiutare?
+  function normalizeText(text: string): string {
+    return text
+      .replace(/\s+/g, " ")
+      .replace(/\n+/g, "\n")
+      .trim();
+  }
+
+  //caricamento dei documenti puliti
+  const docs = (await pdfLoader.load()).map(doc => ({
+    ...doc,
+    pageContent: normalizeText(doc.pageContent),
+    metadata: { ...doc.metadata, source: "pdf" },
+  }));
+
+  const webDocs = (await webLoader.load()).map(doc => ({
+    ...doc,
+    pageContent: normalizeText(doc.pageContent),
+    metadata: { ...doc.metadata, source: "wikipedia" },
+  }));
+
+  const allDocs = [...docs, ...webDocs];
+  
+  //new 
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 1000,
+    chunkOverlap: 200,
+  });
+
+  const splitDocs = await splitter.splitDocuments(allDocs);
+  vectorStore = await MemoryVectorStore.fromDocuments(splitDocs, embeddings);
+
+}
+//senza reranking
+/*
+export async function buildRagContext(question: string): Promise<string> {
+  if (!vectorStore) {
+    await loadAndIndexData();
+  }
+
+  const results = await vectorStore!.similaritySearch(question, 3);
+  return results.map((doc) => doc.pageContent).join("\n");
+}
+*/
+
+//con reranking
+export async function buildRagContext(question: string): Promise<string> {
+  if (!vectorStore) {
+    await loadAndIndexData();
+  }
+
+  // faccio fare l'embedding della query
+  const queryEmbedding = await embeddings.embedQuery(question);
+  // le farò recuperare più documenti del dovuto, una top 10 per poter scegliere dopo
+  const results = await vectorStore!.similaritySearch(question, 10);
+/*
+  console.log("\n--- Docs before reranking) ---\n");
+  results.forEach((doc, i) => {
+    console.log(`Doc ${i + 1} (source: ${doc.metadata.source}):\n${doc.pageContent}\n`);
+  });
+
+  console.log("\n--- Docs after reranking) ---\n");
+*/
+  // controllo la similarità tra query e ogni documento
+  const scored = await Promise.all(results.map(async (doc) => {
+    const docEmbedding = await embeddings.embedQuery(doc.pageContent);
+    const score = cosineSimilarity(queryEmbedding, docEmbedding); //similarità del coseno
+    return { doc, score };
+  }));
+  // riordino i documenti in base a quanto sono simili
+  const reranked = scored
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .map((item) => item.doc);
+  // dai 3 più rilevanti faccio la return del contesto
+  const topDocs = reranked.slice(0, 3);
+
+  // log dettagliato per ogni documento
+  console.log("\n--- Rerenked context ---\n");
+  topDocs.forEach((doc, i) => {
+    console.log(`--- Document ${i + 1} (source: ${doc.metadata?.source}) ---`);
+    console.log(doc.pageContent);
+    console.log();
+  });
+  console.log("--- End of reranked context ---\n");
+  // restituisco il contesto concatenato
+
+  //return topDocs.map((doc) => doc.pageContent).join("\n");
+
+  // Costruisco il prompt da passare all'LLM
+  /*
+const prompt = `
+  Dato questo materiale recuperato da PDF e Wikipedia:\n\n${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
+  Scrivi una spiegazione tecnica e coerente che risponda alla domanda: "${question}"
+`;
+*/
+//const prompt = ``;
+const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
+      ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
+      Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
+      Structure the response in no more than two short paragraphs, each with a maximum of four sentences. 
+      Each sentence should express a single, essential idea to help the user build a concept map. 
+      Avoid annotations, symbols, or formatting. Use natural but concise language.
+      If the answer is not present in the material, say "I don't know".`;
+
+// Eseguo la generazione
+const response = await llm.invoke(prompt);
+console.log("\n--- LLM response ---\n");
+console.log(response.content);
+// Ritorno il testo riformulato come risultato finale
+return response.content as string;
+}
