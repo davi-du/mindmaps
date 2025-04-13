@@ -10,6 +10,13 @@ import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import cosineSimilarity from "compute-cosine-similarity";
 
 //
+const Reset = "\x1b[0m";
+const Bright = "\x1b[1m";
+
+const FgRed = "\x1b[31m";
+const FgGreen = "\x1b[32m";
+const FgYellow = "\x1b[33m";
+const FgBlue = "\x1b[34m";
 
 // Simulazione di __dirname per ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +39,9 @@ const embeddings = new MistralAIEmbeddings({
 let vectorStore: MemoryVectorStore | null = null;
 
 async function loadAndIndexData() {
+  console.log(`${FgGreen}Loading and indexing data...`);
+  console.log(`${Reset}`);
+
   const pdfDir = path.resolve(__dirname, "./data/pdf_files");
 
   const pdfLoader = new DirectoryLoader(pdfDir, {
@@ -43,15 +53,7 @@ async function loadAndIndexData() {
     "https://en.wikipedia.org/wiki/Interpreter_(computing)",
     { selector: "p" }
   );
-
-  //sistemare il testo dovrebbe aiutare?
-  function normalizeText(text: string): string {
-    return text
-      .replace(/\s+/g, " ")
-      .replace(/\n+/g, "\n")
-      .trim();
-  }
-
+  
   //caricamento dei documenti puliti
   const docs = (await pdfLoader.load()).map(doc => ({
     ...doc,
@@ -65,8 +67,14 @@ async function loadAndIndexData() {
     metadata: { ...doc.metadata, source: "wikipedia" },
   }));
 
-  const allDocs = [...docs, ...webDocs];
-  
+  //const allDocs = [...docs, ...webDocs];
+  const allDocsRaw = [...docs, ...webDocs];
+  console.log("\n--- All documents before removing duplicates ---\n");
+  console.log(allDocsRaw);
+  const allDocs = await removeNearDuplicates(allDocsRaw, embeddings);
+  console.log("\n--- All documents after removing duplicates ---\n");
+  console.log(allDocs);
+
   //new 
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 1000,
@@ -77,6 +85,11 @@ async function loadAndIndexData() {
   vectorStore = await MemoryVectorStore.fromDocuments(splitDocs, embeddings);
 
 }
+
+
+
+
+
 //senza reranking
 /*
 export async function buildRagContext(question: string): Promise<string> {
@@ -121,37 +134,94 @@ export async function buildRagContext(question: string): Promise<string> {
   const topDocs = reranked.slice(0, 3);
 
   // log dettagliato per ogni documento
-  console.log("\n--- Rerenked context ---\n");
+  console.log();
+  console.log(`${FgYellow} ### Reranked context ###`);
   topDocs.forEach((doc, i) => {
-    console.log(`--- Document ${i + 1} (source: ${doc.metadata?.source}) ---`);
-    console.log(doc.pageContent);
+    console.log(`${FgBlue}--- Document ${i + 1} (source: ${doc.metadata?.source}) ---`);
+    console.log(`${FgGreen} ${doc.pageContent}`);
     console.log();
   });
-  console.log("--- End of reranked context ---\n");
+  console.log(`${FgYellow} ### End reranked context ###`);
+  console.log();
+  console.log(`${Reset}`);
   // restituisco il contesto concatenato
-
+  /*
   //return topDocs.map((doc) => doc.pageContent).join("\n");
 
   // Costruisco il prompt da passare all'LLM
-  /*
-const prompt = `
-  Dato questo materiale recuperato da PDF e Wikipedia:\n\n${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
-  Scrivi una spiegazione tecnica e coerente che risponda alla domanda: "${question}"
-`;
-*/
-//const prompt = ``;
-const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
-      ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
-      Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
-      Structure the response in no more than two short paragraphs, each with a maximum of four sentences. 
-      Each sentence should express a single, essential idea to help the user build a concept map. 
-      Avoid annotations, symbols, or formatting. Use natural but concise language.
-      If the answer is not present in the material, say "I don't know".`;
 
-// Eseguo la generazione
-const response = await llm.invoke(prompt);
-console.log("\n--- LLM response ---\n");
-console.log(response.content);
-// Ritorno il testo riformulato come risultato finale
-return response.content as string;
+  const prompt = `
+    Dato questo materiale recuperato da PDF e Wikipedia:\n\n${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
+    Scrivi una spiegazione tecnica e coerente che risponda alla domanda: "${question}"
+  `;
+  */
+
+  const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
+        ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
+        Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
+        Structure the response in a single paragraph with a maximum of eight sentences. 
+        Each sentence should express a single, essential idea to help the user build a concept map. 
+        Avoid annotations, symbols, or formatting. Use natural but concise language.
+        If the answer is not present in the material, say "I don't know".`;
+
+  // Eseguo la generazione
+  const response = await llm.invoke(prompt);
+  console.log(`${FgBlue}### Answer generated by the LLM ###`);
+  console.log(response.content);
+  console.log();
+  // Ritorno il testo riformulato come risultato finale
+  return response.content as string;
+}
+
+//provare?
+async function removeNearDuplicates(
+  docs: { pageContent: string; metadata: any }[],
+  embeddings: MistralAIEmbeddings,
+  threshold = 0.9 // soglia di similarità, 0.95 è molto simile?
+): Promise<typeof docs> {
+  const uniqueDocs: typeof docs = [];
+  const seenEmbeddings: number[][] = [];
+
+  for (const doc of docs) {
+    const currentEmbedding = await embeddings.embedQuery(doc.pageContent);
+
+    const isDuplicate = seenEmbeddings.some((existingEmbedding) => {
+      const similarity = cosineSimilarity(existingEmbedding, currentEmbedding);
+      return similarity !== null && similarity > threshold;
+    });
+
+    if (!isDuplicate) {
+      uniqueDocs.push(doc);
+      seenEmbeddings.push(currentEmbedding);
+    }
+  }
+
+  return uniqueDocs;
+}
+
+//sistemare il testo dovrebbe aiutare?
+/*
+function normalizeText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/\n+/g, "\n")
+    .trim();
+}
+*/
+function normalizeText(text: string): string {
+  return text
+    .toLocaleLowerCase()
+    // Rimuove spazi multipli tranne nei newline doppi (paragrafi)
+    .replace(/[ \t]+/g, " ")
+    // Rimuove spazi prima di andare a capo
+    .replace(/ +\n/g, "\n")
+    // Pulisce gli spazi all'inizio di ogni riga
+    .replace(/\n[ \t]+/g, "\n")
+    // Rende uniforme la punteggiatura (es. "ciao , mondo ." -> "ciao, mondo.")
+    .replace(/ ?([.,;:!?]) ?/g, "$1 ")
+    // Mantiene massimo due newline consecutivi (un solo spazio tra paragrafi)
+    .replace(/\n{3,}/g, "\n\n")
+    // Rimuove spazi multipli
+    .replace(/ {2,}/g, " ")
+    .trim();
 }
