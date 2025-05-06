@@ -3,12 +3,15 @@ import express from "express";
 import type { Request, Response } from "express";
 import cors from "cors";
 import { buildRagContext } from "./rag.ts";
-//import { doc } from "prettier";
+import { doc } from "prettier";
 
 const app = express();
 const PORT = 3001;
 
-console.log("\n\nStarting RAG server\n\n");
+const FgYellow = "\x1b[33m";
+const FgGreen = "\x1b[32m";
+
+console.log(`\n ${FgYellow} *** Starting RAG server ***`);
 
 app.use(cors());
 app.use(express.json());
@@ -19,9 +22,7 @@ app.post("/rag", async (req: Request, res: Response) => {
   if (!question) return res.status(400).json({ error: "Missing question." });
 
   try {
-    const question = "What is an interpreter?";
     const context = await buildRagContext(question);
-
     res.json({ context });
   } catch (err) {
     console.error("Error in /rag:", err);
@@ -30,7 +31,7 @@ app.post("/rag", async (req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`RAG server listening on http://localhost:${PORT}`);
+  console.log(`${FgGreen}RAG server listening on http://localhost:${PORT}\n\n`);
 });
 
 export {}; // necessario per evitare errore TS1208 se usi require()

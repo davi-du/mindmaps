@@ -9,7 +9,7 @@ import path, { dirname } from "path";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import cosineSimilarity from "compute-cosine-similarity";
 
-//
+//costanti colori
 const Reset = "\x1b[0m";
 const Bright = "\x1b[1m";
 
@@ -39,6 +39,7 @@ const embeddings = new MistralAIEmbeddings({
 let vectorStore: MemoryVectorStore | null = null;
 
 async function loadAndIndexData() {
+  console.log(`\n\n\n`);
   console.log(`${FgGreen}Loading and indexing data...`);
   console.log(`${Reset}`);
 
@@ -46,7 +47,7 @@ async function loadAndIndexData() {
 
   const pdfLoader = new DirectoryLoader(pdfDir, {
   ".pdf": (filePath) => new PDFLoader(filePath),
-});
+  });
 
 
   const webLoader = new CheerioWebBaseLoader(
@@ -69,11 +70,11 @@ async function loadAndIndexData() {
 
   //const allDocs = [...docs, ...webDocs];
   const allDocsRaw = [...docs, ...webDocs];
-  console.log("\n--- All documents before removing duplicates ---\n");
-  console.log(allDocsRaw);
+  //console.log("\n--- All documents before removing duplicates ---\n");
+  //console.log(allDocsRaw);
   const allDocs = await removeNearDuplicates(allDocsRaw, embeddings);
-  console.log("\n--- All documents after removing duplicates ---\n");
-  console.log(allDocs);
+  //console.log("\n--- All documents after removing duplicates ---\n");
+  //console.log(allDocs);
 
   //new 
   const splitter = new RecursiveCharacterTextSplitter({
@@ -159,10 +160,10 @@ export async function buildRagContext(question: string): Promise<string> {
   const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
         ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
         Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
-        Structure the response in a single paragraph with a maximum of eight sentences. 
+        Structure the response in two paragraphs in total, with around of ten sentences. 
         Each sentence should express a single, essential idea to help the user build a concept map. 
         Avoid annotations, symbols, or formatting. Use natural but concise language.
-        If the answer is not present in the material, say "I don't know".`;
+        If the answer is not present in the material, you must say only "I DON'T KNOW" and nothing else.`;
 
   // Eseguo la generazione
   const response = await llm.invoke(prompt);
@@ -210,18 +211,12 @@ function normalizeText(text: string): string {
 */
 function normalizeText(text: string): string {
   return text
-    .toLocaleLowerCase()
-    // Rimuove spazi multipli tranne nei newline doppi (paragrafi)
+    .toLocaleLowerCase() //?togliere?
     .replace(/[ \t]+/g, " ")
-    // Rimuove spazi prima di andare a capo
     .replace(/ +\n/g, "\n")
-    // Pulisce gli spazi all'inizio di ogni riga
     .replace(/\n[ \t]+/g, "\n")
-    // Rende uniforme la punteggiatura (es. "ciao , mondo ." -> "ciao, mondo.")
     .replace(/ ?([.,;:!?]) ?/g, "$1 ")
-    // Mantiene massimo due newline consecutivi (un solo spazio tra paragrafi)
     .replace(/\n{3,}/g, "\n\n")
-    // Rimuove spazi multipli
     .replace(/ {2,}/g, " ")
     .trim();
 }

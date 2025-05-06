@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/static/css/main.d183cf21.css",
+    "main.js": "/static/js/main.dd76e5ef.js",
+    "static/media/graphologue.png": "/static/media/graphologue.509df56e3173394ffce6.png",
+    "index.html": "/index.html",
+    "static/media/arrowLine.svg": "/static/media/arrowLine.86f1587ff500b23242e1c637d7a4f965.svg",
+    "static/media/dashLine.svg": "/static/media/dashLine.02e5b4e56580bd1ffc9d9e3171dca6d3.svg",
+    "static/media/plainLine.svg": "/static/media/plainLine.af1e2444c6c76a6402ed9d7329513e7e.svg"
+  },
+  "entrypoints": [
+    "static/css/main.d183cf21.css",
+    "static/js/main.dd76e5ef.js"
+  ]
+}
