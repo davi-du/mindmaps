@@ -15,7 +15,6 @@ import { Prompt } from './utils/model'
 import { ListDisplayFormat } from './components/Answer'
 
 // Importazione del logo
-import MindmapsLogo from './media/graphologue.png'
 import logomio from './media/logo_mio.png'
 import { userProvidedAPIKey } from './constants'
 
