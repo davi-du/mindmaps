@@ -76,7 +76,15 @@ code {
   font-size: $font-size-small;
 }
 
-.graphologue-logo img {
-  max-height: 3rem !important;
-  pointer-events: none;
+.graphologue-logo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem;
+
+  img {
+    width: 170px;
+    height: auto;
+  }
 }
+
