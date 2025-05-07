@@ -6,7 +6,7 @@ import { AnswerSlideObject } from '../App'
 export const SlideAnswerText = ({ content }: AnswerSlideObject) => {
   return (
     <div className="slide-text-wrapper">
-      <ReactMarkdown children={content} />
+      <ReactMarkdown>{content}</ReactMarkdown>
     </div>
   )
 }

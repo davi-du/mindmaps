@@ -1,26 +1,26 @@
-import React, { createContext, useEffect, useState } from 'react'
+import React, { 
+  createContext, 
+  useEffect, 
+  useState 
+} from 'react'
 
-// Importazione dei componenti e dei contesti globali
 import { ChatContext } from './components/Contexts'
 import { Interchange } from './components/Interchange'
 import { newQuestionAndAnswer } from './utils/chatUtils'
+
 import {
   EdgeInformation,
   NodeInformation,
   RelationshipSaliency,
 } from './utils/responseProcessing'
 
-// Importazione di altri moduli necessari
 import { Prompt } from './utils/model'
 import { ListDisplayFormat } from './components/Answer'
 
-// Importazione del logo
 import logomio from './media/logo_mio.png'
-import { userProvidedAPIKey } from './constants'
 
 /* ------------------------------------------------------------------- */
 
-// DEFINIZIONE INTERFACCE PER LA GESTIONE DELLA RISPOSTA
 export interface OriginRange {
   start: number
   end: number

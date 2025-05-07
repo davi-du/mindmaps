@@ -50,23 +50,15 @@ export const terminalColor = {
 
 /*
 export const terms = {
-  'codestral-2405': 'accounts/fireworks/models/llama-v3p1-70b-instruct',//'GPT-4 Turbo',
+  'codestral-2405': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
   'gpt-4': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
   'codestral-latest': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
-  wiki: 'Wikidata', // deprecated
-}
-  export const terms = {
-  'codestral-2405': 'llama-v3p1-70b-instruct',
-  'gpt-4': 'llama-v3p1-70b-instruct',
-  'codestral-latest': 'llama-v3p1-70b-instruct',
   wiki: 'Wikidata', // deprecated
 }
 */
 
 export const terms = {
-  'codestral-2405': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
-  'gpt-4': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
-  'codestral-latest': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+  'fireworks-llama': 'accounts/fireworks/models/llama-v3p1-70b-instruct',
   wiki: 'Wikidata', // deprecated
 }
 
@@ -74,9 +66,7 @@ export const magicNodeVerifyPaperCountDefault = 3
 
 /* -------------------------------------------------------------------------- */
 
-export const userProvidedAPIKey: {
-  current: string | null
-} = {
-  current: "fw_3ZV2fDTtt7L2QcprNEkF5Afn", //null,
+export const userProvidedAPIKey = {
+  current: process.env.REACT_APP_FIREWORKS_API_KEY ?? null,
 }
-//fw_3ZV2fDTtt7L2QcprNEkF5Afn
+

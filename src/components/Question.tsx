@@ -8,7 +8,6 @@ import React, {
   useState,
 } from 'react'
 
-import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded'
 import SendRoundedIcon from '@mui/icons-material/SendRounded'
 import HourglassTopRoundedIcon from '@mui/icons-material/HourglassTopRounded'
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded'
@@ -35,7 +34,6 @@ import {
   helpSetQuestionAndAnswer,
   newQuestionAndAnswer,
   trimLineBreaks,
-  //splitTextIntoAnswerObjects
 } from '../utils/chatUtils'
 
 import { InterchangeContext } from './Interchange'
@@ -54,7 +52,7 @@ import {
 
 import { ListDisplayFormat } from './Answer'
 
-import { debug, terminalColor } from '../constants'
+import { debug } from '../constants'
 
 // import rag
 import { getRagContext } from '../utils/ragClient'
@@ -75,7 +73,6 @@ export const Question = () => {
       answer,
       modelStatus: { modelAnswering, modelError },
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     handleSelfCorrection,
   } = useContext(InterchangeContext)
 
@@ -286,15 +283,15 @@ export const Question = () => {
         answerObjectToCorrect.originText.content,
         correctedOriginTextContent,
       )
-     /*
-      // originale
-      answerObjectToCorrect.originText.content = correctedOriginTextContent
-      handleUpdateRelationshipEntities(
-        correctedOriginTextContent,
-        answerObjectId,
-      )
-        */
- 
+      /*
+       // originale
+       answerObjectToCorrect.originText.content = correctedOriginTextContent
+       handleUpdateRelationshipEntities(
+         correctedOriginTextContent,
+         answerObjectId,
+       )
+         */
+
       // Riannotazione se nodi vuoti DA RIVEDERE
       answerObjectToCorrect.originText.content = correctedOriginTextContent
       const tempNodes = parseNodes(correctedOriginTextContent, answerObjectId)
@@ -334,27 +331,7 @@ export const Question = () => {
             const parsingSummary = parsingType === 'summary'
 
             // ! request
-            /*
-            // provare se fireworks ha lo stesso schema di gpt prima 
-            const parsingResult = await parseAIResponseToObjects(
-              predefinedPromptsForParsing[parsingType](
-                parsingSummary
-                  ? answerObject.originText.content
-                  : removeAnnotations(answerObject.originText.content),
-              ),
-              debug ? models.faster : models.smarter,
-            )
 
-            if (parsingResult.error) {
-              handleResponseError(parsingResult)
-              parsingError = true
-              return
-            }
-
-            parsingResults[parsingType] =
-              getTextFromModelResponse(parsingResult)
-              */
-            //mod mia
             const parsingResult = await parseAIResponseToObjects(
               predefinedPromptsForParsing[parsingType](
                 parsingSummary
@@ -597,7 +574,7 @@ export const Question = () => {
 
   const handleAskStream = useCallback(async () => {
     _groundRest()
-  
+
     // recupera contesto
     const ragContext = await getRagContext(question)
 
@@ -614,18 +591,18 @@ export const Question = () => {
 
     let tmpPrompts = null;
 
-    if(ragContext == "I DON'T KNOW" || ragContext == "I DON'T KNOW."){
-      console.log(`- RAG context retrieved successfully -`);
-      const contextWithQuestion = `${ragContext}\n\n${question}`;
-      tmpPrompts = predefinedPrompts.initialAskRag(contextWithQuestion);
-    } else {
+    if (ragContext === "I DON'T KNOW" || ragContext === "I DON'T KNOW.") {
       console.log(`- RAG context not retrieved -`);
       const contextWithQuestion = question;
       tmpPrompts = predefinedPrompts.initialAsk(contextWithQuestion);
+    } else {
+      console.log(`- RAG context retrieved successfully -`);
+      const contextWithQuestion = `${ragContext}\n\n${question}`;
+      tmpPrompts = predefinedPrompts.initialAskRag(contextWithQuestion);
     }
 
     const initialPrompts = tmpPrompts;
-  
+
     const answerObjectId = getAnswerObjectId()
     const preparedAnswerObject: AnswerObject = {
       id: answerObjectId,
@@ -650,16 +627,16 @@ export const Question = () => {
       },
       complete: false,
     }
-  
+
     answerStorage.current.answer = ''
     answerStorage.current.answerObjects = [preparedAnswerObject]
-  
+
     // Mostra oggetto vuoto
     setQuestionsAndAnswers(prev => helpSetQuestionAndAnswer(prev, id, {
       answer: '',
       answerObjects: [preparedAnswerObject],
     }))
-  
+
     // risposta in un solo paragrafo
     await streamAICompletion(
       initialPrompts,
@@ -667,10 +644,10 @@ export const Question = () => {
       (data, fresh) => {
         const delta = trimLineBreaks(getTextFromStreamResponse(data))
         if (!delta) return
-  
+
         answerStorage.current.answer += delta
         answerStorage.current.answerObjects[0].originText.content += delta
-  
+
         setQuestionsAndAnswers(prev => helpSetQuestionAndAnswer(prev, id, {
           answer: answerStorage.current.answer,
           answerObjects: answerStorage.current.answerObjects,
@@ -678,9 +655,9 @@ export const Question = () => {
       },
       true
     )
-  
+
     await handleParsingCompleteAnswerObject(answerObjectId)
-  
+
     setQuestionsAndAnswers(prev => helpSetQuestionAndAnswer(prev, id, {
       answer: answerStorage.current.answer,
       answerObjects: answerStorage.current.answerObjects,
@@ -702,99 +679,6 @@ export const Question = () => {
     debug,
     handleParsingCompleteAnswerObject,
   ])
-
-  /*
-  //LLM CALL
-  // ! ASK modificata per pulire i paragrafi in più (riprovare come prima)
-  const handleAskStream = useCallback(async () => {
-    _groundRest()
-  
-    // recupera contesto
-    const ragContext = await getRagContext(question)
-  
-    let tmpPrompts = null
-  
-    if (ragContext === "I DON'T KNOW" || ragContext === "I DON'T KNOW.") {
-      console.log(`- RAG context retrieved successfully -`)
-      const contextWithQuestion = `${ragContext}\n\n${question}`
-      tmpPrompts = predefinedPrompts.initialAskRag(contextWithQuestion)
-    } else {
-      console.log(`- RAG context not retrieved -`)
-      tmpPrompts = predefinedPrompts.initialAsk(question)
-    }
-  
-    const initialPrompts = tmpPrompts
-  
-    // raccoglie tutto il testo streammato
-    let completeRawAnswer = ''
-  
-    setQuestionsAndAnswers(prev =>
-      helpSetQuestionAndAnswer(prev, id, {
-        answer: '',
-        answerObjects: [],
-      }),
-    )
-  
-    await streamAICompletion(
-      initialPrompts,
-      debug ? models.faster : models.smarter,
-      (data, fresh) => {
-        const delta = trimLineBreaks(getTextFromStreamResponse(data))
-        if (!delta) return
-  
-        completeRawAnswer += delta
-  
-        setQuestionsAndAnswers(prev =>
-          helpSetQuestionAndAnswer(prev, id, {
-            answer: completeRawAnswer,
-          }),
-        )
-      },
-      true,
-    )
-  
-    // dividere la risposta in paragrafi (answerObjects separati)
-    const answerObjects = splitTextIntoAnswerObjects(completeRawAnswer)
-    answerStorage.current.answer = completeRawAnswer
-    answerStorage.current.answerObjects = answerObjects
-  
-    // aggiorna lo stato con tutti i blocchi risposta
-    setQuestionsAndAnswers(prev =>
-      helpSetQuestionAndAnswer(prev, id, {
-        answer: completeRawAnswer,
-        answerObjects,
-      }),
-    )
-  
-    // parsing di ciascun paragrafo
-    for (const obj of answerObjects) {
-      await handleParsingCompleteAnswerObject(obj.id)
-    }
-  
-    // aggiornamento finale dello stato del modello
-    setQuestionsAndAnswers(prev =>
-      helpSetQuestionAndAnswer(prev, id, {
-        modelStatus: {
-          modelAnswering: false,
-          modelAnsweringComplete: true,
-          modelParsing: false,
-          modelParsingComplete: true,
-          modelInitialPrompts: [...initialPrompts.map(p => ({ ...p }))],
-        },
-      }),
-    )
-  }, [
-    _groundRest,
-    getRagContext,
-    setQuestionsAndAnswers,
-    helpSetQuestionAndAnswer,
-    id,
-    question,
-    debug,
-    handleParsingCompleteAnswerObject,
-  ])  
-
-   */
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {

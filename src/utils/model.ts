@@ -1,9 +1,9 @@
 import { debug, userProvidedAPIKey } from '../constants'
 import { terms } from '../constants'
 
-export const ModelAvailable = 'codestral-2405'  //globalBestModelAvailable
+export const ModelAvailable = 'fireworks-llama'
 
-export type ModelForMagic = 'codestral-2405' | 'codestral-latest'
+export type ModelForMagic = 'fireworks-llama'
 
 export const models = {
   smarter: ModelAvailable as ModelForMagic,

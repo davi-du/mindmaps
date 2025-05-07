@@ -5,24 +5,31 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { ChatMistralAI, MistralAIEmbeddings } from "@langchain/mistralai";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
-
+import dotenv from 'dotenv';
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import cosineSimilarity from "compute-cosine-similarity";
 
 //costanti colori
 const Reset = "\x1b[0m";
-const Bright = "\x1b[1m";
-
-const FgRed = "\x1b[31m";
 const FgGreen = "\x1b[32m";
 const FgYellow = "\x1b[33m";
 const FgBlue = "\x1b[34m";
+const Bright = "\x1b[1m";
+const FgRed = "\x1b[31m";
 
 // Simulazione di __dirname per ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const mistralApiKey = "TwLq6jM7zTwo6qcE3vNXokD3MuofaMOA"; //in produzione va tolta eh
+dotenv.config();
+
+const mistralApiKey = process.env.MISTRAL_API_KEY;
+//console.log(`Mistral API Key: ${mistralApiKey}`);
+
+if (!mistralApiKey) {
+  throw new Error("MISTRAL_API_KEY not defined in .env");
+}
+
 
 //modello di chat 
 const llm = new ChatMistralAI({
@@ -86,10 +93,6 @@ async function loadAndIndexData() {
   vectorStore = await MemoryVectorStore.fromDocuments(splitDocs, embeddings);
 
 }
-
-
-
-
 
 //senza reranking
 /*
@@ -160,7 +163,7 @@ export async function buildRagContext(question: string): Promise<string> {
   const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
         ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
         Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
-        Structure the response in two paragraphs in total, with around of ten sentences. 
+        Structure the response in two small paragraphs in total, with around of eight sentences. 
         Each sentence should express a single, essential idea to help the user build a concept map. 
         Avoid annotations, symbols, or formatting. Use natural but concise language.
         If the answer is not present in the material, you must say only "I DON'T KNOW" and nothing else.`;

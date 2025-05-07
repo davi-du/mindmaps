@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
+
 import { Node, ReactFlowProvider, useReactFlow } from 'reactflow'
 import dagre from 'dagre'
 import isEqual from 'react-fast-compare'
@@ -20,13 +21,9 @@ import RectangleRoundedIcon from '@mui/icons-material/RectangleRounded'
 import AttachMoneyRoundedIcon from '@mui/icons-material/AttachMoneyRounded'
 import MoneyOffRoundedIcon from '@mui/icons-material/MoneyOffRounded'
 import SubjectRoundedIcon from '@mui/icons-material/SubjectRounded'
-import SendRoundedIcon from '@mui/icons-material/SendRounded'
-
-////
 import SignalWifi1BarRoundedIcon from '@mui/icons-material/SignalWifi1BarRounded'
 import SignalWifi4BarRoundedIcon from '@mui/icons-material/SignalWifi4BarRounded'
 
-// Importazione dei tipi e contesti globali
 import {
   QuestionAndAnswer,
   OriginRange,
@@ -35,35 +32,46 @@ import {
   AnswerObjectEntitiesTarget,
   DebugModeContext,
 } from '../App'
+
 import ReactFlowComponent from '../componentsFlow/ReactFlowComponent'
 import { InterchangeContext } from './Interchange'
 import { SlideAnswerText } from './SlideAnswer'
 import { useEffectEqual } from '../utils/useEffectEqual'
 import { answerObjectsToReactFlowObject } from '../utils/graphToFlowObject'
+
 import {
   CustomNodeData,
   NodeSnippet,
   copyNodeSnippets,
   hardcodedNodeWidthEstimation,
 } from '../componentsFlow/Node'
-import { hardcodedNodeSize, viewFittingOptions } from '../constants'
+
+import {
+  hardcodedNodeSize,
+  viewFittingOptions
+} from '../constants'
+
 import { ViewFittingJob } from '../componentsFlow/ViewFitter'
+
 import {
   getRangeFromStart,
   mergeEdgeEntities,
   mergeNodeEntities,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   removeAnnotations,
   splitAnnotatedSentences,
 } from '../utils/responseProcessing'
+
 import { getGraphBounds } from '../utils/utils'
+
 import {
   BoundingAInBoundingB,
   minMoveBringBoundingAIntoB,
 } from '../utils/viewGeometry'
+
 import { makeFlowTransition } from '../utils/flowChangingTransition'
 
-// Creazione del contesto per la gestione degli oggetti di risposta nel grafo
+
+/* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 export interface ReactFlowObjectContextProps {
   // nodeEntities: NodeEntity[]
   // edgeEntities: EdgeEntity[]
@@ -71,7 +79,6 @@ export interface ReactFlowObjectContextProps {
   generatingFlow: boolean
 }
 
-// Contesto per la gestione dei blocchi di risposta
 export const ReactFlowObjectContext =
   createContext<ReactFlowObjectContextProps>({
     // nodeEntities: [],
@@ -80,7 +87,6 @@ export const ReactFlowObjectContext =
     generatingFlow: false,
   })
 
-////
 export interface AnswerBlockContextProps {
   handleOrganizeNodes: () => void
 }
@@ -89,7 +95,6 @@ export const AnswerBlockContext = createContext<AnswerBlockContextProps>(
   {} as AnswerBlockContextProps,
 )
 
-// Componente principale della risposta
 export const Answer = () => {
   const { questionAndAnswer } = useContext(InterchangeContext)
   const { id } = questionAndAnswer as QuestionAndAnswer
@@ -104,7 +109,6 @@ export const Answer = () => {
   )
 }
 
-// Tipi per la visualizzazione della risposta
 export type ListDisplayFormat = 'original' | 'summary' | 'slide'
 export type DiagramDisplayFormat = 'split' | 'merged'
 
@@ -112,7 +116,6 @@ export type DiagramDisplayFormat = 'split' | 'merged'
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-// Contesto per la gestione delle risposte visualizzate
 interface AnswerListContextProps {
   // synced: QuestionAndAnswerSynced
   handleHighlightAnswerObject: (
@@ -131,7 +134,6 @@ const AnswerListContext = createContext<AnswerListContextProps>(
   {} as AnswerListContextProps,
 )
 
-// Componente che gestisce la lista delle risposte e il loro formato
 const AnswerListView = ({
   questionAndAnswer,
   questionAndAnswer: {
@@ -347,13 +349,13 @@ export const AnswerBlockItem = ({
   const nodeEntities = isForMergedDiagram
     ? mergeNodeEntities(answerObjects, answerObjectIdsHidden)
     : useSummary
-    ? answerObject.summary.nodeEntities
-    : answerObject.originText.nodeEntities
+      ? answerObject.summary.nodeEntities
+      : answerObject.originText.nodeEntities
   const edgeEntities: EdgeEntity[] = isForMergedDiagram
     ? mergeEdgeEntities(answerObjects, answerObjectIdsHidden)
     : useSummary
-    ? answerObject.summary.edgeEntities
-    : answerObject.originText.edgeEntities
+      ? answerObject.summary.edgeEntities
+      : answerObject.originText.edgeEntities
 
   const runViewFittingJobs = useCallback(() => {
     if (viewFittingJobRunning.current || viewFittingJobs.current.length === 0)
@@ -370,8 +372,14 @@ export const AnswerBlockItem = ({
       const reactFlowWrapperElement = document.querySelector(
         '.react-flow-wrapper',
       ) as HTMLElement // they are all the same size
-      if (!reactFlowWrapperElement) return // ! hard return
+      //if (!reactFlowWrapperElement) return // ! hard return (dopo c'è la mia modifica)
+      if (!reactFlowWrapperElement) {
+        viewFittingJobRunning.current = false
+        runViewFittingJobs()
+        return
+      }
 
+      
       const viewBounding = reactFlowWrapperElement.getBoundingClientRect()
 
       if (
@@ -577,7 +585,6 @@ export const AnswerBlockItem = ({
 
   /* -------------------------------------------------------------------------- */
 
-  //ReactFlowComponent inizia la generazione del grafo
   return (
     <AnswerBlockContext.Provider
       value={{
@@ -585,9 +592,8 @@ export const AnswerBlockItem = ({
       }}
     >
       <div
-        className={`answer-block-item-wrapper${
-          isForMergedDiagram ? ' merged-diagram-wrapper' : ''
-        }`}
+        className={`answer-block-item-wrapper${isForMergedDiagram ? ' merged-diagram-wrapper' : ''
+          }`}
       >
         {!isForMergedDiagram && (
           <AnswerTextBlock
@@ -639,7 +645,6 @@ const AnswerTextBlock = ({
     handleHighlightAnswerObject,
     handleHideAnswerObject,
     handleAnswerObjectSwitchListDisplayFormat,
-    // handleAnswerObjectRemove,
   } = useContext(AnswerListContext)
 
   const answerObjectComplete = answerObject.complete
@@ -694,11 +699,9 @@ const AnswerTextBlock = ({
     <div className="answer-item-wrapper">
       <div
         key={`answer-range-${answerObject.id}`}
-        className={`answer-item answer-item-block interchange-component${
-          index !== 0 ? (diagramMerged ? ' drop-up-answer' : ' drop-down') : ''
-        }${listDisplay === 'slide' ? ' slide-wrapper' : ''}${
-          answerObjectHighlighted && diagramMerged ? ' highlighted-item' : ''
-        }`}
+        className={`answer-item answer-item-block interchange-component${index !== 0 ? (diagramMerged ? ' drop-up-answer' : ' drop-down') : ''
+          }${listDisplay === 'slide' ? ' slide-wrapper' : ''}${answerObjectHighlighted && diagramMerged ? ' highlighted-item' : ''
+          }`}
         onMouseEnter={() => {
           if (diagramMerged && !answerObjectHidden)
             handleHighlightAnswerObject(answerObject.id, 'add', true)
@@ -710,9 +713,8 @@ const AnswerTextBlock = ({
       >
         <div className="answer-block-menu">
           <span
-            className={`answer-block-menu-item${
-              listDisplay === 'original' ? ' highlighted-list-display' : ''
-            }`}
+            className={`answer-block-menu-item${listDisplay === 'original' ? ' highlighted-list-display' : ''
+              }`}
             onClick={() => {
               handleAnswerObjectSwitchListDisplayFormat(
                 answerObject.id,
@@ -724,11 +726,9 @@ const AnswerTextBlock = ({
             original
           </span>
           <span
-            className={`answer-block-menu-item${
-              listDisplay === 'slide' ? ' highlighted-list-display' : ''
-            }${
-              answerObjectComplete && modelParsingComplete ? '' : ' disabled'
-            }`}
+            className={`answer-block-menu-item${listDisplay === 'slide' ? ' highlighted-list-display' : ''
+              }${answerObjectComplete && modelParsingComplete ? '' : ' disabled'
+              }`}
             onClick={() => {
               handleAnswerObjectSwitchListDisplayFormat(
                 answerObject.id,
@@ -740,11 +740,9 @@ const AnswerTextBlock = ({
             outline
           </span>
           <span
-            className={`answer-block-menu-item${
-              listDisplay === 'summary' ? ' highlighted-list-display' : ''
-            }${
-              answerObjectComplete && modelParsingComplete ? '' : ' disabled'
-            }`}
+            className={`answer-block-menu-item${listDisplay === 'summary' ? ' highlighted-list-display' : ''
+              }${answerObjectComplete && modelParsingComplete ? '' : ' disabled'
+              }`}
             onClick={() => {
               handleAnswerObjectSwitchListDisplayFormat(
                 answerObject.id,
@@ -759,9 +757,8 @@ const AnswerTextBlock = ({
           <span className="answer-block-menu-item-divider">|</span>
 
           <span
-            className={`answer-block-menu-item${
-              answerObjectHighlightedActually ? ' highlighted' : ''
-            }${!answerObjectComplete || !diagramMerged ? ' disabled' : ''}`}
+            className={`answer-block-menu-item${answerObjectHighlightedActually ? ' highlighted' : ''
+              }${!answerObjectComplete || !diagramMerged ? ' disabled' : ''}`}
             onClick={() => {
               handleHighlightAnswerObject(
                 answerObject.id,
@@ -773,9 +770,8 @@ const AnswerTextBlock = ({
             highlight
           </span>
           <span
-            className={`answer-block-menu-item${
-              answerObjectHidden ? ' hidden' : ''
-            }${!answerObjectComplete || !diagramMerged ? ' disabled' : ''}`}
+            className={`answer-block-menu-item${answerObjectHidden ? ' hidden' : ''
+              }${!answerObjectComplete || !diagramMerged ? ' disabled' : ''}`}
             onClick={() => {
               handleHideAnswerObject(answerObject.id)
             }}
@@ -796,9 +792,8 @@ const AnswerTextBlock = ({
         {/* )} */}
         <div className="tell-me-more-wrapper">
           <span
-            className={`tell-me-more${
-              answerObjectComplete && modelParsingComplete ? '' : ' disabled'
-            }`}
+            className={`tell-me-more${answerObjectComplete && modelParsingComplete ? '' : ' disabled'
+              }`}
             onClick={() => {
               handleAnswerObjectTellLessOrMore(answerObject.id, 'more')
             }}
@@ -809,9 +804,8 @@ const AnswerTextBlock = ({
       </div>
       {lastTextBlock && (
         <div
-          className={`add-paragraph${
-            answerObjectComplete && modelParsingComplete ? '' : ' disabled'
-          }`}
+          className={`add-paragraph${answerObjectComplete && modelParsingComplete ? '' : ' disabled'
+            }`}
           onClick={() => handleAnswerObjectsAddOneMore()}
         >
           <SubjectRoundedIcon />
