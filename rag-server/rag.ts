@@ -56,12 +56,13 @@ async function loadAndIndexData() {
   ".pdf": (filePath) => new PDFLoader(filePath),
   });
 
-
+/*
   const webLoader = new CheerioWebBaseLoader(
     "https://en.wikipedia.org/wiki/Interpreter_(computing)",
     { selector: "p" }
   );
-  
+*/
+
   //caricamento dei documenti puliti
   const docs = (await pdfLoader.load()).map(doc => ({
     ...doc,
@@ -69,21 +70,19 @@ async function loadAndIndexData() {
     metadata: { ...doc.metadata, source: "pdf" },
   }));
 
+/*
   const webDocs = (await webLoader.load()).map(doc => ({
     ...doc,
     pageContent: normalizeText(doc.pageContent),
     metadata: { ...doc.metadata, source: "wikipedia" },
   }));
+*/
 
-  //const allDocs = [...docs, ...webDocs];
-  const allDocsRaw = [...docs, ...webDocs];
-  //console.log("\n--- All documents before removing duplicates ---\n");
-  //console.log(allDocsRaw);
+  
+  //const allDocsRaw = [...docs, ...webDocs];
+  const allDocsRaw = [...docs];
   const allDocs = await removeNearDuplicates(allDocsRaw, embeddings);
-  //console.log("\n--- All documents after removing duplicates ---\n");
-  //console.log(allDocs);
 
-  //new 
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 1000,
     chunkOverlap: 200,
