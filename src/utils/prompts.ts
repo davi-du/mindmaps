@@ -76,8 +76,7 @@ Example:
         content: `
 The user's goal is to build a concept map to visually explain the response.
 To support this goal, annotate directly within the text the main entities and the relationships between them for each sentence in the paragraphs.
-Entities are usually noun phrases (groups of words centered on a noun) and should be annotated using the format:
-[entity ($N1)]
+Entities are usually noun phrases (groups of words centered on a noun) and should be annotated using the format: [entity ($N1)]
 Example: [Artificial Intelligence ($N1)]
 Do not annotate conjunctive adverbs like “therefore”, “since then”, etc.
 A relationship is usually a word or phrase consisting of verbs, adjectives, adverbs, or prepositions, such as: “contributes to”, “is”, “through”, “such as”.
@@ -89,7 +88,7 @@ Each entity must appear in at least one relationship.
 Relationships must only connect entities present in the text.
 Maintain consistent identifiers (e.g., $N1, $N2...) for repeated entities throughout the text.
 If a sentence contains references that point to previously introduced concepts, such as pronouns, synonyms, descriptive phrases, or other paraphrased forms,
-assign them the same identifier already used for that entity. This ensures consistency across sentences and guarantees that related concepts are annotated as a single entity.
+assign them the same identifier already used for that entity, this ensures consistency across sentences and guarantees that related concepts are annotated as a single entity.
 Examples:
 If “the process of cell division” is later referred to as “this biological mechanism”, both expressions should be assigned the same identifier.
 If “a famous scientist’s invention” and “the first electric motor” describe the same object, they must share the same identifier.
@@ -98,7 +97,7 @@ Do not change the structure or meaning of the original text. Do not summarize. D
 You may slightly rearrange the sentence only if necessary to facilitate annotation, but the content must remain unchanged.
 Each paragraph must be fully annotated.
 Do NOT list entities or relationships separately. You must embed all annotations inline in the text. No exceptions.
-Only output the cleaned and structured text without any introductory or explanatory sentences.
+Only output the cleaned and structured text, do not add anything else.
 
 Example:
 [Artificial Intelligence (AI) ($N1)] [is a ($H, $N1, $N2)] [field of computer science ($N2)] that [creates ($H, $N1, $N3)] [intelligent machines ($N3)].

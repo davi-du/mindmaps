@@ -1,15 +1,18 @@
 import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { DirectoryLoader } from "langchain/document_loaders/fs/directory";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { ChatMistralAI, MistralAIEmbeddings } from "@langchain/mistralai";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
+import fs from "fs";
 import dotenv from 'dotenv';
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import cosineSimilarity from "compute-cosine-similarity";
 
-//costanti colori
+// FAISS store
+import { FaissStore } from "@langchain/community/vectorstores/faiss";
+
+// costanti colori
 const Reset = "\x1b[0m";
 const FgGreen = "\x1b[32m";
 const FgYellow = "\x1b[33m";
@@ -24,14 +27,11 @@ const __dirname = dirname(__filename);
 dotenv.config();
 
 const mistralApiKey = process.env.MISTRAL_API_KEY;
-//console.log(`Mistral API Key: ${mistralApiKey}`);
-
 if (!mistralApiKey) {
   throw new Error("MISTRAL_API_KEY not defined in .env");
 }
 
-
-//modello di chat 
+// modello di chat
 const llm = new ChatMistralAI({
   model: "mistral-large-latest",
   temperature: 0,
@@ -43,126 +43,101 @@ const embeddings = new MistralAIEmbeddings({
   apiKey: mistralApiKey,
 });
 
-let vectorStore: MemoryVectorStore | null = null;
+// Path di salvataggio dell'indice FAISS
+const INDEX_DIR = path.resolve(__dirname, './faiss_index');
+let vectorStore: FaissStore | null = null;
 
 async function loadAndIndexData() {
   console.log(`\n\n\n`);
+  console.time("Indicizzazione FAISS"); //timer
   console.log(`${FgGreen}Loading and indexing data...`);
   console.log(`${Reset}`);
 
   const pdfDir = path.resolve(__dirname, "./data/pdf_files");
+  // Prendi solo file .pdf, ignora .DS_Store e simili
+  const filePaths = fs
+    .readdirSync(pdfDir)
+    .filter(f => f.toLowerCase().endsWith(".pdf"))
+    .map(f => path.join(pdfDir, f));
 
-  const pdfLoader = new DirectoryLoader(pdfDir, {
-  ".pdf": (filePath) => new PDFLoader(filePath),
-  });
+  // Carica ogni PDF uno per uno
+  const rawDocs: { pageContent: string; metadata: any }[] = [];
+  for (const filePath of filePaths) {
+    const docsPage = await new PDFLoader(filePath).load();
+    rawDocs.push(
+      ...docsPage.map(doc => ({
+        ...doc,
+        pageContent: normalizeText(doc.pageContent),
+        metadata: { ...doc.metadata, source: "pdf" },
+      }))
+    );
+  }
 
-/*
-  const webLoader = new CheerioWebBaseLoader(
-    "https://en.wikipedia.org/wiki/Interpreter_(computing)",
-    { selector: "p" }
-  );
-*/
 
-  //caricamento dei documenti puliti
-  const docs = (await pdfLoader.load()).map(doc => ({
-    ...doc,
-    pageContent: normalizeText(doc.pageContent),
-    metadata: { ...doc.metadata, source: "pdf" },
-  }));
-
-/*
-  const webDocs = (await webLoader.load()).map(doc => ({
-    ...doc,
-    pageContent: normalizeText(doc.pageContent),
-    metadata: { ...doc.metadata, source: "wikipedia" },
-  }));
-*/
-
-  
-  //const allDocsRaw = [...docs, ...webDocs];
-  const allDocsRaw = [...docs];
-  const allDocs = await removeNearDuplicates(allDocsRaw, embeddings);
+  const uniqueDocs = await removeNearDuplicates(rawDocs, embeddings);
 
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 1000,
     chunkOverlap: 200,
   });
+  const splitDocs = await splitter.splitDocuments(uniqueDocs);
 
-  const splitDocs = await splitter.splitDocuments(allDocs);
-  vectorStore = await MemoryVectorStore.fromDocuments(splitDocs, embeddings);
-
-}
-
-//senza reranking
-/*
-export async function buildRagContext(question: string): Promise<string> {
-  if (!vectorStore) {
-    await loadAndIndexData();
+  // Costruisci o ricarica indice FAISS con fallback a rebuild
+  if (fs.existsSync(INDEX_DIR)) {
+    try {
+      vectorStore = await FaissStore.load(INDEX_DIR, embeddings);
+      console.log(`${FgYellow}FAISS index loaded from disk${Reset}`);
+    } catch (err) {
+      console.warn(`${FgRed}Failed to load FAISS index, rebuilding…${Reset}`, err);
+      fs.rmSync(INDEX_DIR, { recursive: true, force: true });
+    }
   }
 
-  const results = await vectorStore!.similaritySearch(question, 3);
-  return results.map((doc) => doc.pageContent).join("\n");
-}
-*/
-
-//con reranking
-export async function buildRagContext(question: string): Promise<string> {
   if (!vectorStore) {
-    await loadAndIndexData();
+    fs.mkdirSync(INDEX_DIR, { recursive: true });
+    vectorStore = await FaissStore.fromDocuments(splitDocs, embeddings);
+    await vectorStore.save(INDEX_DIR);
+    console.log(`${FgYellow}FAISS index created and saved to disk${Reset}`);
   }
 
-  // faccio fare l'embedding della query
+  console.timeEnd("Indicizzazione FAISS"); 
+}
+
+export async function buildRagContext(question: string): Promise<string> {
+  if (!vectorStore) await loadAndIndexData();
+
+  console.log(`${FgGreen}`, question)
   const queryEmbedding = await embeddings.embedQuery(question);
-  // le farò recuperare più documenti del dovuto, una top 10 per poter scegliere dopo
+  // Recupera più documenti per reranking
   const results = await vectorStore!.similaritySearch(question, 10);
-/*
-  console.log("\n--- Docs before reranking) ---\n");
-  results.forEach((doc, i) => {
-    console.log(`Doc ${i + 1} (source: ${doc.metadata.source}):\n${doc.pageContent}\n`);
-  });
 
-  console.log("\n--- Docs after reranking) ---\n");
-*/
-  // controllo la similarità tra query e ogni documento
-  const scored = await Promise.all(results.map(async (doc) => {
-    const docEmbedding = await embeddings.embedQuery(doc.pageContent);
-    const score = cosineSimilarity(queryEmbedding, docEmbedding); //similarità del coseno
-    return { doc, score };
-  }));
-  // riordino i documenti in base a quanto sono simili
-  const reranked = scored
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .map((item) => item.doc);
-  // dai 3 più rilevanti faccio la return del contesto
-  const topDocs = reranked.slice(0, 3);
+  const scored = await Promise.all(
+    results.map(async doc => {
+      const docEmbedding = await embeddings.embedQuery(doc.pageContent);
+      const score = cosineSimilarity(queryEmbedding, docEmbedding) || 0;
+      return { doc, score };
+    })
+  );
 
-  // log dettagliato per ogni documento
+  const topDocs = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(item => item.doc);
+
   console.log();
   console.log(`${FgYellow} ### Reranked context ###`);
   topDocs.forEach((doc, i) => {
-    console.log(`${FgBlue}--- Document ${i + 1} (source: ${doc.metadata?.source}) ---`);
-    console.log(`${FgGreen} ${doc.pageContent}`);
-    console.log();
+    console.log(`${FgBlue}--- Document ${i + 1} (source: ${doc.metadata.source}) ---`);
+    console.log(`${FgGreen}${doc.pageContent}\n`);
   });
   console.log(`${FgYellow} ### End reranked context ###`);
   console.log();
-  console.log(`${Reset}`);
-  // restituisco il contesto concatenato
-  /*
-  //return topDocs.map((doc) => doc.pageContent).join("\n");
-
-  // Costruisco il prompt da passare all'LLM
 
   const prompt = `
-    Dato questo materiale recuperato da PDF e Wikipedia:\n\n${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
-    Scrivi una spiegazione tecnica e coerente che risponda alla domanda: "${question}"
-  `;
-  */
-
-  const prompt = `
-    Based on the following material retrieved from PDF documents and Wikipedia:
+    Based on the following material retrieved from PDF documents:
     ${topDocs.map(d => d.pageContent).join("\n\n")}
-    Answer the user's question in a clear, coherent, and technically accurate way: "${question}".
+    Write a structured, technically accurate explanation that addresses the question: "${question}".
+    Do not include introductory or concluding phrases. Avoid numbered lists or bullet points.
     The user's goal is to build a concept map to visually explain the response.
     To support this goal, provide a well-structured response in multiple paragraphs.
     Each paragraph should cover a central aspect or topic of the answer.
@@ -177,53 +152,43 @@ export async function buildRagContext(question: string): Promise<string> {
     If the answer is not present in the material, you must say only "I DON'T KNOW" and nothing else.
   `;
 
-  // Eseguo la generazione
   const response = await llm.invoke(prompt);
   console.log(`${FgBlue}### Answer generated by the LLM ###`);
   console.log(response.content);
+
+
   console.log();
-  // Ritorno il testo riformulato come risultato finale
+
   return response.content as string;
 }
 
-//provare?
 async function removeNearDuplicates(
   docs: { pageContent: string; metadata: any }[],
   embeddings: MistralAIEmbeddings,
-  threshold = 0.9 // soglia di similarità, 0.95 è molto simile?
-): Promise<typeof docs> {
-  const uniqueDocs: typeof docs = [];
+  threshold = 0.9
+): Promise<{ pageContent: string; metadata: any }[]> {
+  const uniqueDocs: { pageContent: string; metadata: any }[] = [];
   const seenEmbeddings: number[][] = [];
 
   for (const doc of docs) {
-    const currentEmbedding = await embeddings.embedQuery(doc.pageContent);
-
-    const isDuplicate = seenEmbeddings.some((existingEmbedding) => {
-      const similarity = cosineSimilarity(existingEmbedding, currentEmbedding);
-      return similarity !== null && similarity > threshold;
+    if (!doc.pageContent) {
+      continue;
+    }
+    const emb: number[] = await embeddings.embedQuery(doc.pageContent);
+    const isDup = seenEmbeddings.some((existingEmb: number[]) => {
+      const sim = cosineSimilarity(existingEmb, emb);
+      return sim !== null && sim > threshold;
     });
-
-    if (!isDuplicate) {
+    if (!isDup) {
       uniqueDocs.push(doc);
-      seenEmbeddings.push(currentEmbedding);
+      seenEmbeddings.push(emb);
     }
   }
-
   return uniqueDocs;
 }
 
-//sistemare il testo dovrebbe aiutare?
-/*
 function normalizeText(text: string): string {
   return text
-    .replace(/\s+/g, " ")
-    .replace(/\n+/g, "\n")
-    .trim();
-}
-*/
-function normalizeText(text: string): string {
-  return text
-    .toLocaleLowerCase() //?togliere?
     .replace(/[ \t]+/g, " ")
     .replace(/ +\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")
