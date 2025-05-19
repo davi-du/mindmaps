@@ -8,8 +8,9 @@ export interface ChatContextType {
   setQuestionsAndAnswers: (
     questionsAndAnswers:
       | QuestionAndAnswer[]
-      | ((prev: QuestionAndAnswer[]) => QuestionAndAnswer[]),
+      | ((prev: QuestionAndAnswer[]) => QuestionAndAnswer[])
   ) => void
+  questionsAndAnswers: Record<string, QuestionAndAnswer>
 }
 export const ChatContext = createContext<ChatContextType>({} as ChatContextType)
 

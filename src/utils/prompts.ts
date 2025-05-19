@@ -76,17 +76,24 @@ Example:
         content: `
 The user's goal is to build a concept map to visually explain the response.
 To support this goal, annotate directly within the text the main entities and the relationships between them for each sentence in the paragraphs.
-Entities are usually noun phrases (groups of words centered on a noun) and should be annotated using the format: [entity ($N1)]
+Entities are usually noun phrases (groups of words centered on a noun) and should be annotated using the format:
+[entity ($N1)]
 Example: [Artificial Intelligence ($N1)]
 Do not annotate conjunctive adverbs like “therefore”, “since then”, etc.
 A relationship is usually a word or phrase consisting of verbs, adjectives, adverbs, or prepositions, such as: “contributes to”, “is”, “through”, “such as”.
 Relationships must be annotated using the format: [relationship ($H, $N1, $N2)]
-
-Example: [AI systems ($N1)] can be [divided into ($H, $N1, $N9; $H, $N1, $N10)] [narrow AI ($N9)] and [general AI ($N10)]
+Example:
+[AI systems ($N1)] can be [divided into ($H, $N1, $N9; $H, $N1, $N10)] [narrow AI ($N9)] and [general AI ($N10)]
 Use ($H) for high-saliency relationships (core ideas relevant for summaries), and ($L) for supporting ones.
 Each entity must appear in at least one relationship.
 Relationships must only connect entities present in the text.
 Maintain consistent identifiers (e.g., $N1, $N2...) for repeated entities throughout the text.
+If a sentence contains references that point to previously introduced concepts, such as pronouns, synonyms, descriptive phrases, or other paraphrased forms,
+assign them the same identifier already used for that entity. This ensures consistency across sentences and guarantees that related concepts are annotated as a single entity.
+Examples:
+If “the process of cell division” is later referred to as “this biological mechanism”, both expressions should be assigned the same identifier.
+If “a famous scientist’s invention” and “the first electric motor” describe the same object, they must share the same identifier.
+If “the early stage” is clarified or renamed as “the training phase”, both phrases should use the same identifier.
 Do not change the structure or meaning of the original text. Do not summarize. Do not add any special symbols or formatting.
 You may slightly rearrange the sentence only if necessary to facilitate annotation, but the content must remain unchanged.
 Each paragraph must be fully annotated.

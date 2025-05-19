@@ -123,6 +123,11 @@ export const DebugModeContext = createContext<DebugModeContextType>({} as DebugM
 
 export const ChatApp = () => {
   const [questionsAndAnswers, setQuestionsAndAnswers] = useState<QuestionAndAnswer[]>([])
+  const questionsAndAnswersById = questionsAndAnswers.reduce((acc, qa) => {
+  acc[qa.id] = qa
+  return acc
+}, {} as Record<string, QuestionAndAnswer>)
+
   const [debugMode, setDebugMode] = useState<boolean>(false)
 
   useEffect(() => {
@@ -140,12 +145,13 @@ export const ChatApp = () => {
   }, [questionsAndAnswers])
 
   return (
-    <ChatContext.Provider
-      value={{
-        questionsAndAnswersCount: questionsAndAnswers.length,
-        setQuestionsAndAnswers,
-      }}
-    >
+    <ChatContext.Provider value={{
+      setQuestionsAndAnswers,
+      questionsAndAnswersCount: questionsAndAnswers.length,
+      questionsAndAnswers: questionsAndAnswersById,
+    }}>
+
+
       <DebugModeContext.Provider value={{ debugMode, setDebugMode }}>
         <div className="chat-app">
           <div className="interchange-item graphologue-logo">
@@ -159,7 +165,9 @@ export const ChatApp = () => {
               )
 
               const isLast = index === questionsAndAnswers.length - 1
-              const shouldRender = isLast || qa.answer.length > 0 || hasGraphData
+              const isGenerating = !qa.modelStatus.modelAnsweringComplete
+              const shouldRender = isLast || qa.answer.length > 0 || hasGraphData || isGenerating
+
 
               return shouldRender ? (
                 <Interchange key={`interchange-${qa.id}`} data={qa} />

@@ -159,13 +159,23 @@ export async function buildRagContext(question: string): Promise<string> {
   `;
   */
 
-  const prompt = `Based on the following material retrieved from PDF documents and Wikipedia:\n\n
-        ${topDocs.map(d => d.pageContent).join("\n\n")}\n\n
-        Answer the user's question in a clear, coherent, and technically accurate way: "${question}". 
-        Structure the response in two small paragraphs in total, with around of eight sentences. 
-        Each sentence should express a single, essential idea to help the user build a concept map. 
-        Avoid annotations, symbols, or formatting. Use natural but concise language.
-        If the answer is not present in the material, you must say only "I DON'T KNOW" and nothing else.`;
+  const prompt = `
+    Based on the following material retrieved from PDF documents and Wikipedia:
+    ${topDocs.map(d => d.pageContent).join("\n\n")}
+    Answer the user's question in a clear, coherent, and technically accurate way: "${question}".
+    The user's goal is to build a concept map to visually explain the response.
+    To support this goal, provide a well-structured response in multiple paragraphs.
+    Each paragraph should cover a central aspect or topic of the answer.
+    Each paragraph must contain fewer than 10 sentences, and the full response should consist of 2 paragraphs total.
+    When multiple facts refer to the same entity or are logically connected (e.g., observations, causes, consequences),
+    write them as a single compound sentence. Use explicit conjunctions or subordinating structures to preserve the connection.
+    Do not split logically linked ideas into separate sentences, especially when they share the same subject or concept.
+    Avoid pronouns, relative clauses, and vague references such as “this”, “which”, “they”, or “such”.
+    Instead, always restate the subject explicitly to maintain clarity and enable consistent annotation.
+    If the same concept appears in multiple sentences, use exactly the same wording to refer to it, to ensure proper linking in the concept map.
+    Use precise, noun-based terminology for key entities, and clear, verb-based phrases for relationships.
+    If the answer is not present in the material, you must say only "I DON'T KNOW" and nothing else.
+  `;
 
   // Eseguo la generazione
   const response = await llm.invoke(prompt);

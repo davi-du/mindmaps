@@ -11,6 +11,7 @@ import React, {
 import SendRoundedIcon from '@mui/icons-material/SendRounded'
 import HourglassTopRoundedIcon from '@mui/icons-material/HourglassTopRounded'
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded'
+import ReplayRoundedIcon from '@mui/icons-material/ReplayRounded'
 
 import { AnswerObject } from '../App'
 import { ChatContext } from './Contexts'
@@ -54,6 +55,7 @@ import { ListDisplayFormat } from './Answer'
 
 import { debug } from '../constants'
 
+import { makeFlowTransition } from '../utils/flowChangingTransition'
 // import rag
 import { getRagContext } from '../utils/ragClient'
 
@@ -71,10 +73,18 @@ export const Question = () => {
       id,
       question,
       answer,
-      modelStatus: { modelAnswering, modelError },
+      modelStatus: { modelAnswering, modelError, modelAnsweringComplete },
     },
     handleSelfCorrection,
   } = useContext(InterchangeContext)
+
+  const { questionsAndAnswers } = useContext(ChatContext)
+  const isSameQuestion = question === questionsAndAnswers[id]?.question
+  const allQuestions = Object.values(questionsAndAnswers)
+  const isLastQuestion = allQuestions[allQuestions.length - 1]?.id === id
+
+
+
 
   const [activated, setActivated] = useState(false) // show text box or not
   const questionItemRef = useRef<HTMLDivElement>(null)
@@ -572,7 +582,96 @@ export const Question = () => {
     ],
   )
 
+  const handleReprocess = useCallback(async () => {
+    _groundRest() // se serve a gestire lo stato UI
+
+    const ragContext = await getRagContext(question)
+
+    const prompts =
+      ragContext === "I DON'T KNOW" || ragContext === "I DON'T KNOW."
+        ? predefinedPrompts.initialAsk(question)
+        : predefinedPrompts.initialAskRag(`${ragContext}\n\n${question}`)
+
+    const response = await parseAIResponseToObjects(prompts, debug ? models.faster : models.smarter)
+    const regeneratedText = getTextFromModelResponse(response)
+
+    makeFlowTransition()
+
+    const corrected = await handleSelfCorrection({
+      id,
+      originText: { content: regeneratedText, nodeEntities: [], edgeEntities: [] },
+      summary: { content: '', nodeEntities: [], edgeEntities: [] },
+      slide: { content: '' },
+      answerObjectSynced: {
+        listDisplay: 'original',
+        saliencyFilter: 'high',
+        collapsedNodes: [],
+        sentencesBeingCorrected: [],
+      },
+      complete: false,
+    })
+
+    const nodes = parseNodes(corrected, id)
+    const edges = parseEdges(corrected, id)
+
+    const [summaryResp, slideResp] = await Promise.all([
+      parseAIResponseToObjects(
+        predefinedPromptsForParsing.summary(removeAnnotations(corrected)),
+        debug ? models.faster : models.smarter
+      ),
+      parseAIResponseToObjects(
+        predefinedPromptsForParsing.slide(removeAnnotations(corrected)),
+        debug ? models.faster : models.smarter
+      ),
+    ])
+
+    const summaryText = getTextFromModelResponse(summaryResp)
+    const slideText = getTextFromModelResponse(slideResp)
+
+    const newAnswerObject: AnswerObject = {
+      id,
+      originText: {
+        content: corrected,
+        nodeEntities: nodeIndividualsToNodeEntities(nodes),
+        edgeEntities: edges,
+      },
+      summary: {
+        content: summaryText,
+        nodeEntities: nodeIndividualsToNodeEntities(parseNodes(summaryText, id)),
+        edgeEntities: parseEdges(summaryText, id),
+      },
+      slide: {
+        content: cleanSlideResponse(slideText),
+      },
+      answerObjectSynced: {
+        listDisplay: 'original',
+        saliencyFilter: 'high',
+        collapsedNodes: [],
+        sentencesBeingCorrected: [],
+      },
+      complete: true,
+    }
+
+    setQuestionsAndAnswers(prev =>
+      helpSetQuestionAndAnswer(prev, id, {
+        answer: corrected,
+        answerObjects: [newAnswerObject],
+        modelStatus: {
+          modelAnswering: false,
+          modelAnsweringComplete: true,
+          modelParsing: false,
+          modelParsingComplete: true,
+          modelInitialPrompts: [...prompts.map(p => ({ ...p }))],
+        },
+      })
+    )
+  }, [question, id, setQuestionsAndAnswers])
+
+
+
   const handleAskStream = useCallback(async () => {
+    let hasStarted = false
+
     _groundRest()
 
     // recupera contesto
@@ -631,12 +730,6 @@ export const Question = () => {
     answerStorage.current.answer = ''
     answerStorage.current.answerObjects = [preparedAnswerObject]
 
-    // Mostra oggetto vuoto
-    setQuestionsAndAnswers(prev => helpSetQuestionAndAnswer(prev, id, {
-      answer: '',
-      answerObjects: [preparedAnswerObject],
-    }))
-
     // risposta in un solo paragrafo
     await streamAICompletion(
       initialPrompts,
@@ -645,6 +738,27 @@ export const Question = () => {
         const delta = trimLineBreaks(getTextFromStreamResponse(data))
         if (!delta) return
 
+        // ✅ Primo token ricevuto
+        if (!hasStarted) {
+          hasStarted = true
+          makeFlowTransition()
+
+          setQuestionsAndAnswers(prev =>
+            helpSetQuestionAndAnswer(prev, id, {
+              answer: delta,
+              answerObjects: [{
+                ...preparedAnswerObject,
+                originText: {
+                  ...preparedAnswerObject.originText,
+                  content: delta,
+                },
+              }],
+            })
+          )
+          return
+        }
+
+        // ✅ Token successivi → aggiornamento continuo
         answerStorage.current.answer += delta
         answerStorage.current.answerObjects[0].originText.content += delta
 
@@ -652,8 +766,7 @@ export const Question = () => {
           answer: answerStorage.current.answer,
           answerObjects: answerStorage.current.answerObjects,
         }))
-      },
-      true
+      }, true
     )
 
     await handleParsingCompleteAnswerObject(answerObjectId)
@@ -697,6 +810,8 @@ export const Question = () => {
     )
   }, [id, setQuestionsAndAnswers])
 
+
+
   return (
     <div
       ref={questionItemRef}
@@ -708,22 +823,35 @@ export const Question = () => {
             ref={textareaRef}
             className="question-textarea"
             value={question}
-            placeholder={'ask a question'}
+            placeholder="ask a question"
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             rows={1}
+            disabled={!isLastQuestion}
           />
+
           <button
-            disabled={!canAsk}
             className="bar-button"
-            onClick={handleAskStream}
+            onClick={isSameQuestion ? handleReprocess : handleAskStream}
+            disabled={
+              modelAnswering ||
+              (!question.trim()) ||  // nessuna domanda scritta
+              (!isSameQuestion && !isLastQuestion) // blocca Ask se non sei sull'ultimo
+            }
+            title={isSameQuestion ? 'Reprocess' : 'Ask'}
           >
             {modelAnswering ? (
               <HourglassTopRoundedIcon className="loading-icon" />
+            ) : isSameQuestion ? (
+              <ReplayRoundedIcon />
             ) : (
               <SendRoundedIcon />
             )}
           </button>
+
+
+
+
 
           <button
             disabled={questionsAndAnswersCount < 2}
