@@ -39,18 +39,18 @@ const llm = new ChatMistralAI({
   temperature: 0,
   apiKey: mistralApiKey,
 });
-/*
+
 const embeddings = new MistralAIEmbeddings({
   model: "mistral-embed",
   apiKey: mistralApiKey,
 });
-*/
 
+/*
 const embeddings = new CohereEmbeddings({
   apiKey: process.env.COHERE_API_KEY!,    
   model: "embed-english-v2.0",
 });
-
+*/
 //reranker già pronto (il mio non funziona bene, da punteggi troppo simili tra loro)
 const cohereRerank = new CohereRerank({
   apiKey: process.env.COHERE_API_KEY!,
@@ -67,7 +67,7 @@ let vectorStore: FaissStore | null = null;
 
 async function loadAndIndexData() {
   console.log(`\n\n\n`);
-  console.time("Indicizzazione FAISS"); //timer start
+  console.time("FAISS indexing time: "); //timer start
   console.log(`${FgGreen}Loading and indexing data...${Reset}`);
 
   const pdfDir = path.resolve(__dirname, "./data/pdf_files");
@@ -80,7 +80,7 @@ async function loadAndIndexData() {
   // Carica ogni PDF uno per uno
   const rawDocs: { pageContent: string; metadata: any }[] = [];
 
-  console.log("File da indicizzare:", filePaths);
+  console.log("Files to be indexed:", filePaths);
 
   for (const filePath of filePaths) {
     const docsPage = await new PDFLoader(filePath).load();
@@ -96,7 +96,7 @@ async function loadAndIndexData() {
 
   rawDocs.forEach((doc, i) => {
     console.log(
-      `${FgBlue}Chunk ${i + 1}${Reset} da ${FgYellow}${doc.metadata.source}${Reset}: ` +
+      `${FgBlue}Chunk ${i + 1}${Reset} from ${FgYellow}${doc.metadata.source}${Reset}: ` +
       `"${doc.pageContent.replace(/\n/g, ' ').slice(0, 60)}..."`
     );
   });
@@ -131,7 +131,7 @@ async function loadAndIndexData() {
     console.log(`${FgYellow}FAISS index created and saved to disk${Reset}`);
   }
 
-  console.timeEnd("Indicizzazione FAISS"); //timer stop
+  console.timeEnd("FAISS indexing time: "); //timer stop
 }
 
                             export async function buildRagContext(question: string): Promise<string> {
@@ -139,12 +139,11 @@ async function loadAndIndexData() {
 
                               console.log(`${FgGreen}`, question)
                               const queryEmbedding = await embeddings.embedQuery(question);
-                              console.log(`${FgYellow}Query embedding vector:${Reset}`, queryEmbedding);                              
+                              //console.log(`${FgYellow}Query embedding vector:${Reset}`, queryEmbedding);                              
 
-                              // 1) Recupera i primi 10 chunk via FAISS
                               const results = await vectorStore!.similaritySearch(question, 10);
                               
-                              console.log("🔍 Similarity scores:");
+                              console.log("Similarity scores:");
                               const scoredAll = await Promise.all(results.map(async (doc, idx) => {
                                 const embDoc = await embeddings.embedQuery(doc.pageContent);
                                 const score = cosineSimilarity(queryEmbedding, embDoc) || 0;
@@ -155,20 +154,13 @@ async function loadAndIndexData() {
                                 );
                                 return { doc, score };
                               }));
-                              console.log("🔍 Similarity scores end");
+                              console.log("Similarity scores end\n");
                               
-                              
-                              
-                              
-                              
-                              
-                              // 2) Trasforma in Document per Cohere
                               const docs = results.map((doc) => new Document({ pageContent: doc.pageContent }));
 
-                              // 3) Chiama il reranker su topN=10 (o quel numero che preferisci)
-                              const rerankResults = await cohereRerank.rerank(docs, question, { topN: 10 });
+                              const rerankResults = await cohereRerank.rerank(docs, question, { topN: 10 });  //chiamata al reranker
 
-                              // 4) Stampa la classifica completa
+                              //classifica
                               console.log(`${FgYellow} ### Rerank Results ###${Reset}`);
                               rerankResults.forEach((r, idx) => {
                                 const originalDoc = results[r.index];
@@ -176,8 +168,8 @@ async function loadAndIndexData() {
                                   .replace(/\n/g, " ")
                                   .slice(0, 60);
                                 console.log(
-                                  `${FgBlue}${String(idx + 1).padStart(2, "0")}.` + // posizione nella classifica
-                                  ` (orig idx ${r.index})` +                       // indice nel primo array
+                                  `${FgBlue}${String(idx + 1).padStart(2, "0")}.` + 
+                                  ` (orig idx ${r.index})` +
                                   ` ${FgYellow}Score:${Reset} ${r.relevanceScore.toFixed(4)}` +
                                   ` — "${preview}..."`
                                 );
@@ -228,8 +220,8 @@ async function loadAndIndexData() {
 
 async function removeNearDuplicates(
   docs: { pageContent: string; metadata: any }[],
-  //embeddings: MistralAIEmbeddings,
-  embeddings: CohereEmbeddings,
+  embeddings: MistralAIEmbeddings,
+  //embeddings: CohereEmbeddings,
   threshold = 0.7 //stava a 0.9
 ): Promise<{ pageContent: string; metadata: any }[]> {
   const uniqueDocs: { pageContent: string; metadata: any }[] = [];
