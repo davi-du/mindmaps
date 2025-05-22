@@ -36,7 +36,7 @@
   },
   "scripts": {
     "prepare-data": "ts-node rag-server/indexData.ts",
-    "start": "concurrently \"ts-node rag-server/index.ts\" \"react-scripts start\"",
+    "start": "react-scripts start",
     "start:full": "npm run preload-data && npm start",
     "start:jet": "REACT_APP_DEV_IDE=jet react-scripts start",
     "start:netlify": "netlify dev",
