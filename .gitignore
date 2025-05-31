@@ -1,1 +1,6 @@
 node_modules/
+rag-server/.venv/
+rag-server/.cache/
+rag-server/data/
+rag-server/faiss_index/
+.DS_Store
